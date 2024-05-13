@@ -195,7 +195,7 @@ export async function getPoolInfoList(address: string) {
         poolObject.poolId = poolData.fields.id.id;
         poolObject.poolType = poolData.type.split(",")[0].split("::")[4];
 
-        // reward_allocate
+        // 獎勵分配設定
         let rewardAllocate: any = new Object();
         rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio)/100).toFixed(2);
         rewardAllocate.allocateUserAmount = poolData.fields.reward_allocate.fields.allocate_user_amount
@@ -203,6 +203,7 @@ export async function getPoolInfoList(address: string) {
         rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio)/100).toFixed(2);
         poolObject.rewardAllocate = rewardAllocate;
 
+        // 時間設定
         let timeInfo: any = new Object();
         timeInfo.rewardDuration = poolData.fields.time_info.fields.reward_duration;
         timeInfo.startTime = poolData.fields.time_info.fields.start_time;
@@ -224,6 +225,46 @@ export async function getPoolInfoList(address: string) {
           poolObject.shareSupplyInfo = await getShareSupply(poolConfig.shareSupply);
         }
 
+        // 已領取獎勵的Map<round, address>
+        let claimedMap = await getTableData(poolData.fields.claimed.fields.id.id);
+        poolObject.claimedMap = claimedMap;
+
+        // 存放可以領獎的得獎者 陣列 
+        // {poolId, round, luckNum}
+        let canClaimRoundWinnerList: any = [];
+        poolObject.canClaimRoundWinnerList = canClaimRoundWinnerList;
+
+        let dynamicFieldsResp = await suiClient.getDynamicFields({
+          parentId: poolConfig.pool,
+        });
+
+        if (dynamicFieldsResp.data){
+          let array = dynamicFieldsResp.data;
+          for (let dynamicFields of array){
+            if (dynamicFields.objectType === "u64"){
+              let winnerObjResp = await suiClient.getObject({
+                id: dynamicFields.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (winnerObjResp.data?.content){
+                let dataContent: any = winnerObjResp.data.content;
+                let round = dataContent.fields.name;
+                if (claimedMap && claimedMap.has(round)){
+                  continue;
+                }
+                canClaimRoundWinnerList.push(
+                  {
+                    poolId : poolObject.poolId,
+                    round : round,
+                    luckNum : dataContent.fields.value
+                  }
+                );
+              }
+            }
+          }
+        }
         poolList.push(poolObject);
       }
     }
@@ -250,7 +291,7 @@ async function getShareSupply(shareSupplyId: string) {
 }
 
 // 取得 用戶質押資訊 列表
-export async function getUserStakeInfoList(address: string){
+export async function getUserStakeInfoList(address: string, canClaimRoundWinnerList: any[]){
   let usrStakeInfoList: any[] = [];
 
   let objectResponse: any = await suiClient.getOwnedObjects({
@@ -269,6 +310,14 @@ export async function getUserStakeInfoList(address: string){
       usrStakeInfo.id = resp.data.content.fields.id.id;
       let startNum = resp.data.content.fields.start_num;
       let endNum = resp.data.content.fields.end_num;
+      let winnerInfoList: any[] = [];
+      usrStakeInfo.winnerInfoList = winnerInfoList;
+      for (let winnerInfo of canClaimRoundWinnerList){
+        let luckNum = winnerInfo.luckNum;
+        if (luckNum >= startNum && luckNum <= endNum){
+          winnerInfoList.push(winnerInfo);
+        }
+      }
       usrStakeInfo.startNum = startNum;
       usrStakeInfo.endNum = endNum;
       usrStakeInfo.suiAmount = (Number(endNum) - Number(startNum) + 1) / SUI_COIN_DECIMAL;
@@ -428,19 +477,26 @@ export async function packAllocateRewardsTxb(
 
 // 建構 領取獎勵 的交易區塊
 export async function packClaimRewardTxb(
-  poolId: string
+  stakedShareId: string,
+  winnerInfoList: any[]
 ) {
 
   let txb: TransactionBlock = new TransactionBlock();
 
-  let args: TransactionArgument[] = [
-    txb.object(poolId)
-  ];
+  for (let winnerInfo of winnerInfoList){
+    let args: TransactionArgument[] = [
+      txb.object(winnerInfo.poolId),
+      txb.pure.u64(winnerInfo.round),
+      txb.pure([txb.object(stakedShareId)]),
+    ];
+  
+    txb.moveCall({
+      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
+      arguments: args
+    });
+  }
 
-  txb.moveCall({
-    target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
-    arguments: args
-  });
+  return txb;
 }
 
 function hex16String2Vector(str: string) {

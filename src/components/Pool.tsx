@@ -37,9 +37,13 @@ export function Pool() {
 
   useEffect(() => {
     if (account) {
+      let canClaimRoundWinnerList: any[] = [];
       getPoolInfoList(account.address).then((resp) => {
         setPoolList(resp);
-        console.log(JSON.stringify(resp));
+        resp.map((poolInfo: any) => {
+          canClaimRoundWinnerList.push.apply(canClaimRoundWinnerList, poolInfo.canClaimRoundWinnerList);
+        });
+        console.log(resp);
       });
       let poolTypeEnum: any = getPoolTypeEnum();
       let poolTypeMap = new Map();
@@ -51,7 +55,7 @@ export function Pool() {
         poolTypeMap.set(key, poolTypeEnum[key]);
       });
       setPoolTypeMap(poolTypeMap);
-      getUserStakeInfoList(account.address).then((resp) => {
+      getUserStakeInfoList(account.address, canClaimRoundWinnerList).then((resp) => {
         console.log(resp);
         setUserStakeInfoList(resp);
       });
@@ -461,6 +465,44 @@ export function Pool() {
                         Withdraw
                       </Button>
                     </Flex>
+                    {
+                      userStakeInfo.winnerInfoList > 0
+                        ?
+                        <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
+                          <Button className="Button violet" onClick={() => packClaimRewardTxb(
+                            userStakeInfo.poolType,
+                            userStakeInfo.id
+                          ).then((txb) => {
+                            if (txb) {
+                              signAndExecuteTransactionBlock(
+                                {
+                                  transactionBlock: txb,
+                                  options: {
+                                    showBalanceChanges: true,
+                                    showObjectChanges: true,
+                                    showEvents: true,
+                                    showEffects: true,
+                                    showInput: true,
+                                    showRawInput: true
+                                  }
+                                },
+                                {
+                                  onSuccess: (successResult) => {
+                                    console.log('executed transaction block success', successResult);
+                                  },
+                                  onError: (errorResult) => {
+                                    console.log('executed transaction block error', errorResult);
+                                  },
+                                },
+                              );
+                            }
+                          })}>
+                            Withdraw
+                          </Button>
+                        </div>
+                        :
+                        <></>
+                    }
                   </div>
                 )
               })
