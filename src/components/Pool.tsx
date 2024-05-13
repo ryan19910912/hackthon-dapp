@@ -1,5 +1,5 @@
 import { useCurrentAccount, useSignAndExecuteTransactionBlock } from "@mysten/dapp-kit";
-import { Container, Flex, Heading, Text, Button, SelectItem } from "@radix-ui/themes";
+import { Container, Flex, Heading, Text, Button } from "@radix-ui/themes";
 import {
   getPoolTypeEnum,
   getUserStakeInfoList,
@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 
 import * as Dialog from '@radix-ui/react-dialog';
 import '../resource/style.css';
-import { Cross2Icon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
+import { Cross2Icon } from '@radix-ui/react-icons';
 
 export function Pool() {
 
