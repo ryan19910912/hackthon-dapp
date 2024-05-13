@@ -166,7 +166,7 @@ export async function packNewNumberPoolTxb(
 }
 
 // 取得 pool 資訊 列表
-export async function getPoolInfoList(address: string) {
+export async function getPoolInfoList() {
 
   let poolList: Object[] = new Array<Object>();
 
@@ -487,7 +487,7 @@ export async function packClaimRewardTxb(
     let args: TransactionArgument[] = [
       txb.object(winnerInfo.poolId),
       txb.pure.u64(winnerInfo.round),
-      txb.pure([txb.object(stakedShareId)]),
+      txb.makeMoveVec({objects: [stakedShareId]}),
     ];
   
     txb.moveCall({

@@ -37,13 +37,17 @@ export function Pool() {
 
   useEffect(() => {
     if (account) {
-      let canClaimRoundWinnerList: any[] = [];
-      getPoolInfoList(account.address).then((resp) => {
+      getPoolInfoList().then((resp) => {
         setPoolList(resp);
+        let canClaimRoundWinnerList: any[] = [];
         resp.map((poolInfo: any) => {
           canClaimRoundWinnerList.push.apply(canClaimRoundWinnerList, poolInfo.canClaimRoundWinnerList);
         });
         console.log(resp);
+        getUserStakeInfoList(account.address, canClaimRoundWinnerList).then((resp) => {
+          console.log(resp);
+          setUserStakeInfoList(resp);
+        });
       });
       let poolTypeEnum: any = getPoolTypeEnum();
       let poolTypeMap = new Map();
@@ -55,10 +59,6 @@ export function Pool() {
         poolTypeMap.set(key, poolTypeEnum[key]);
       });
       setPoolTypeMap(poolTypeMap);
-      getUserStakeInfoList(account.address, canClaimRoundWinnerList).then((resp) => {
-        console.log(resp);
-        setUserStakeInfoList(resp);
-      });
     }
   }, [account]);
 
@@ -466,12 +466,13 @@ export function Pool() {
                       </Button>
                     </Flex>
                     {
-                      userStakeInfo.winnerInfoList > 0
+                      userStakeInfo.winnerInfoList.length > 0
                         ?
                         <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
+                          <h3>Bingo !!!</h3>
                           <Button className="Button violet" onClick={() => packClaimRewardTxb(
-                            userStakeInfo.poolType,
-                            userStakeInfo.id
+                            userStakeInfo.id,
+                            userStakeInfo.winnerInfoList
                           ).then((txb) => {
                             if (txb) {
                               signAndExecuteTransactionBlock(
@@ -497,7 +498,7 @@ export function Pool() {
                               );
                             }
                           })}>
-                            Withdraw
+                            Claim Reward
                           </Button>
                         </div>
                         :
