@@ -219,10 +219,25 @@ module pooltogether::validator_adapter{
         
         df::add<u64, u64>(pool.uid(), current_round, lucky_num);
 
+        // combine prevoius rewards
+        let mut round = current_round - 1;
+        loop{
+            let mut previous_reward_opt = pool.extract_previous_rewards<VALIDATOR, Coin<SUI>, Coin<SUI>>(round);
+            if (previous_reward_opt.is_none()){
+                previous_reward_opt.destroy_none();
+                break
+            }else{
+                total_sui.join(previous_reward_opt.extract());
+                previous_reward_opt.destroy_none();
+                round = round - 1;
+            };
+        };
+
         pool.put_current_round_reward_to_claimable<VALIDATOR, Coin<SUI>, Coin<SUI>>( total_sui);
 
         pool.next_round();
         pool.update_time(clock);
+        pool.add_expired_data(clock);
     }
 
     #[allow(lint(self_transfer))]
@@ -230,8 +245,10 @@ module pooltogether::validator_adapter{
         pool: &mut Pool<VALIDATOR, Coin<SUI>, Coin<SUI>>,
         round: u64,
         mut shares: vector<StakedPoolShare<VALIDATOR, Coin<SUI>, Coin<SUI>>>,
+        clock: &Clock,
         ctx: &TxContext,
     ){
+        pool.check_claim_expired(round, clock);
         pool.check_is_claimed(round);
         pool.check_round_could_claim_reward<VALIDATOR, Coin<SUI>, Coin<SUI>>(round);
 

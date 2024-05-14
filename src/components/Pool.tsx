@@ -9,7 +9,7 @@ import {
   packStakeTxb,
   packWithdrawTxb,
   packAllocateRewardsTxb,
-  packClaimRewardTxb,
+  packClaimRewardTxb
 } from "../api/sui_api";
 import { useState, useEffect } from 'react';
 
@@ -28,6 +28,7 @@ export function Pool() {
   const [prepareDuration, setPrepareDuration] = useState(0);
   const [lockStateDuration, setLockStateDuration] = useState(0);
   const [rewardDuration, setRewardDuration] = useState(0);
+  const [expireDuration, setExpireDuration] = useState(0);
   const [platformRatio, setPlatformRatio] = useState(0);
   const [rewardRatio, setRewardRatio] = useState(0);
   const [allocateGasPayerRatio, setAllocateGasPayerRatio] = useState(0);
@@ -67,6 +68,7 @@ export function Pool() {
     setPrepareDuration(0);
     setLockStateDuration(0);
     setRewardDuration(0);
+    setExpireDuration(0);
     setPlatformRatio(0);
     setRewardRatio(0);
     setAllocateGasPayerRatio(0);
@@ -147,11 +149,11 @@ export function Pool() {
 
                 <fieldset className="Fieldset">
                   <label className="Label">
-                    <p>Platform Ratio</p>
-                    (2 decimal places)
+                    <p>Expire Duration</p>
+                    (Second)
                   </label>
-                  <input className="Input" type="number" value={platformRatio} placeholder="0.5"
-                    onChange={(e) => setPlatformRatio(Number(e.target.value))} />
+                  <input className="Input" type="number" value={expireDuration}
+                    onChange={(e) => setExpireDuration(Number(e.target.value))} />
                 </fieldset>
 
                 <fieldset className="Fieldset">
@@ -161,6 +163,15 @@ export function Pool() {
                   </label>
                   <input className="Input" type="number" value={rewardRatio} placeholder="99"
                     onChange={(e) => setRewardRatio(Number(e.target.value))} />
+                </fieldset>
+
+                <fieldset className="Fieldset">
+                  <label className="Label">
+                    <p>Platform Ratio</p>
+                    (2 decimal places)
+                  </label>
+                  <input className="Input" type="number" value={platformRatio} placeholder="0.5"
+                    onChange={(e) => setPlatformRatio(Number(e.target.value))} />
                 </fieldset>
 
                 <fieldset className="Fieldset">
@@ -179,6 +190,7 @@ export function Pool() {
                       prepareDuration,
                       lockStateDuration,
                       rewardDuration,
+                      expireDuration,
                       platformRatio,
                       rewardRatio,
                       allocateGasPayerRatio
@@ -290,8 +302,6 @@ export function Pool() {
                               },
                             },
                           );
-                        } else {
-                          alert("Get Roll Dice Transaction Block Fail");
                         }
                       })}>
                         New Number Pool
@@ -350,8 +360,6 @@ export function Pool() {
                                         },
                                       },
                                     );
-                                  } else {
-                                    alert("Get Roll Dice Transaction Block Fail");
                                   }
                                 })}>
                                   Confirm

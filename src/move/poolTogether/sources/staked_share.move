@@ -145,7 +145,6 @@ module pooltogether::staked_share{
 
     }
 
-
     public fun amount<PoolType, NativeType, RewardType>(
         share: &StakedPoolShare<PoolType, NativeType, RewardType>,
     ): u64{

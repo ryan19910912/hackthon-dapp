@@ -105,6 +105,7 @@ export async function packNewPoolTxb(
   prepareDuration: number,
   lockStateDuration: number,
   rewardDuration: number,
+  expireDuration: number,
   platformRatio: number,
   rewardRatio: number,
   allocateGasPayerRatio: number
@@ -124,6 +125,7 @@ export async function packNewPoolTxb(
     txb.pure(prepareDuration * 1000),
     txb.pure(lockStateDuration * 1000),
     txb.pure(rewardDuration * 1000),
+    txb.pure(expireDuration * 1000),
     txb.pure(platformRatio * 100),
     txb.pure(rewardRatio * 100),
     txb.pure(allocateGasPayerRatio * 100)
@@ -396,6 +398,9 @@ export async function packStakeTxb(
 
   const [coins] = txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]);
 
+  let validatorAddress = await getTopValidatorAddress();
+  console.log("validatorAddress = "+validatorAddress);
+
   let args: TransactionArgument[] = [
     txb.object(GLOBAL_CONFIG_ID),
     txb.object(poolConfig.shareSupply),
@@ -403,9 +408,11 @@ export async function packStakeTxb(
     txb.object(poolId),
     txb.object(SUI_SYSTEM_STATE_ID),
     coins,
-    txb.pure.address(poolConfig.validator),
+    txb.pure(validatorAddress),
     txb.object(SUI_CLOCK_ID)
   ];
+
+  txb.setSender(address);
 
   txb.moveCall({
     target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_STAKE}`,
@@ -450,18 +457,19 @@ export async function packAllocateRewardsTxb(
 
   let txb: TransactionBlock = new TransactionBlock();
 
-  // const theLatestBeacon = await fetchBeacon(drandClient)
   const theLatestBeacon = await fetchBeaconByTime(drandClient, Date.now())
 
   const drand_round: number = theLatestBeacon.round;
   const byteArray = hex16String2Vector(theLatestBeacon.signature);
+
+  let validatorAddress = await getTopValidatorAddress();
 
   let args: TransactionArgument[] = [
     txb.object(GLOBAL_CONFIG_ID),
     txb.object(poolType.shareSupply),
     txb.object(SUI_SYSTEM_STATE_ID),
     txb.object(poolId),
-    txb.pure.address(poolType.validator),
+    txb.pure.address(validatorAddress),
     txb.pure.u64(drand_round),
     txb.pure(byteArray),
     txb.object(SUI_CLOCK_ID)
@@ -488,6 +496,7 @@ export async function packClaimRewardTxb(
       txb.object(winnerInfo.poolId),
       txb.pure.u64(winnerInfo.round),
       txb.makeMoveVec({objects: [stakedShareId]}),
+      txb.object(SUI_CLOCK_ID)
     ];
   
     txb.moveCall({
@@ -497,6 +506,22 @@ export async function packClaimRewardTxb(
   }
 
   return txb;
+}
+
+// 取得 供應 資訊
+async function getTopValidatorAddress() {
+  let objectResponse = await suiClient.getValidatorsApy();
+  let address: string = "";
+  let apy: number = 0;
+  if (objectResponse.apys){
+    objectResponse.apys.map((apyObj: any) => {
+      if (apyObj.apy > apy){
+        apy = apyObj.apy;
+        address = apyObj.address;
+      }
+    })
+  }
+  return address;
 }
 
 function hex16String2Vector(str: string) {

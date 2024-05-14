@@ -11,6 +11,7 @@ module pooltogether::pool{
     use std::{
         type_name::{Self, TypeName},
         string::{Self, String},
+        option::{Self, Option},
     };
 
 
@@ -28,6 +29,8 @@ module pooltogether::pool{
     const ENumberPoolAlreadySet: u64 = 8;
     const ESettlingNow: u64 = 9;
     const EWrongTimeSetting:u64 = 10;
+    const EClaimPhaseExpired: u64 = 11;
+    const EWrongRound: u64 = 12;
 
     public struct VALIDATOR has store, copy, drop{}
     public struct BUCKET_PROTOCOL has store, copy, drop{}
@@ -45,6 +48,7 @@ module pooltogether::pool{
         start_time: u64,
         lock_stake_duration: u64,
         reward_duration: u64,
+        expire_duration: u64,
     }
 
 
@@ -72,6 +76,10 @@ module pooltogether::pool{
     public struct StakedValidatorKey has store, copy, drop {}
     public struct RestakeReceipt {}
 
+    public struct ClaimExpiredTime has store, copy, drop{}
+
+    
+
     fun init (ctx: &mut TxContext){
         let adminCap = AdminCap{
             id: object::new(ctx),
@@ -97,6 +105,7 @@ module pooltogether::pool{
         prepare_duration: u64,
         lock_stake_duration: u64,
         reward_duration: u64,
+        expire_duration: u64,
         platform_ratio: u64,
         reward_ratio: u64,
         allocate_gas_payer_ratio: u64,
@@ -107,7 +116,7 @@ module pooltogether::pool{
         check_duplicated<PoolType, NativeType, RewardType>(config);
 
         // create new pool
-        let mut pool = create_pool<PoolType, NativeType, RewardType>(clock, prepare_duration,lock_stake_duration, reward_duration, platform_ratio, reward_ratio, allocate_gas_payer_ratio, ctx);
+        let mut pool = create_pool<PoolType, NativeType, RewardType>(clock, prepare_duration,lock_stake_duration, reward_duration, expire_duration, platform_ratio, reward_ratio, allocate_gas_payer_ratio, ctx);
 
         // update type table
         if (dof::exists_(&config.id, type_name::get<PoolType>()) ){
@@ -122,6 +131,10 @@ module pooltogether::pool{
         // record the pool type 
         record_pool<PoolType, NativeType, RewardType>(config, pool.id.uid_to_inner(), ctx);
 
+        let mut expire_table = table::new<u64, u64>(ctx);
+        expire_table.add(pool.current_round, (pool.time_info.start_time + expire_duration));
+        dof::add(&mut pool.id, ClaimExpiredTime{}, expire_table);
+
         // pool to shared object
         transfer::share_object(pool)
     }
@@ -129,8 +142,9 @@ module pooltogether::pool{
     public fun create_pool<PoolType: store + copy + drop, NativeType: store + key, RewardType: store + key>(
         clock: &Clock,
         prepare_duration: u64,
-        reward_duration: u64,
         lock_stake_duration: u64,
+        reward_duration: u64,
+        expire_duration: u64,
         platform_ratio: u64,
         reward_ratio: u64,
         allocate_gas_payer_ratio: u64,
@@ -142,8 +156,8 @@ module pooltogether::pool{
             
         Pool<PoolType, NativeType, RewardType>{
             id: object::new(ctx),
-            current_round: 0,
-            time_info: TimeInfo{ start_time: (clock::timestamp_ms(clock) + prepare_duration), reward_duration, lock_stake_duration,},
+            current_round: 1,
+            time_info: TimeInfo{ start_time: (clock::timestamp_ms(clock) + prepare_duration), reward_duration, lock_stake_duration, expire_duration,},
             reward_allocate: RewardAllocate{allocate_user_amount: 1, platform_ratio, reward_ratio, allocate_gas_payer_ratio,},
             rewards: bag::new(ctx),
             claimable: table::new(ctx),
@@ -224,6 +238,31 @@ module pooltogether::pool{
         round: u64,
     ){
         assert!(pool.current_round > round, ERoundError);
+    }
+
+    public(package) fun check_claim_expired <PoolType, NativeType: store + key, RewardType: store + key>(
+        pool: &Pool<PoolType, NativeType, RewardType>,
+        round: u64,
+        clock: &Clock,
+    ){
+        let expire_table = dof::borrow<ClaimExpiredTime, Table<u64, u64>>(&pool.id, ClaimExpiredTime{});
+        let expire_time  = *expire_table.borrow(round);
+        assert!(expire_time <= clock::timestamp_ms(clock), EClaimPhaseExpired);
+    }
+
+    public(package) fun add_expired_data<PoolType, NativeType: store + key, RewardType: store + key>(
+        pool: &mut Pool<PoolType, NativeType, RewardType>,
+        clock: &Clock,
+    ){
+        let expire_table = dof::borrow_mut<ClaimExpiredTime, Table<u64, u64>>(&mut pool.id, ClaimExpiredTime{});
+        expire_table.add(pool.current_round, pool.time_info.start_time + pool.time_info.expire_duration);
+    }
+
+    public(package) fun is_claimed<PoolType, NativeType: store + key, RewardType: store + key>(
+        pool: &Pool<PoolType, NativeType, RewardType>,
+        round: u64,
+    ): bool{
+        pool.claimed.contains(round)
     }
 
 
@@ -322,6 +361,20 @@ module pooltogether::pool{
             dof::add(&mut config.id, type_name::get<PoolType>(), type_table);
         }
 
+        
+    }
+
+    public(package) fun extract_previous_rewards<PoolType, NativeType: key + store, RewardType: store + key>(
+        pool: &mut Pool<PoolType, NativeType, RewardType>,
+        round: u64,
+    ): Option<RewardType>{
+        assert!(round < pool.current_round, EWrongRound);
+        
+        if (pool.claimable.contains(round)){
+            option::some<RewardType>(extract_round_claimable_reward<PoolType, NativeType, RewardType>(pool, round))
+        }else{
+            option::none<RewardType>()
+        }
         
     }
 }
