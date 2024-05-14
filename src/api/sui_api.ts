@@ -286,15 +286,19 @@ async function getShareSupply(shareSupplyId: string) {
   let obj: any = new Object();
   if (objectResponse.data?.content) {
     let data: any = objectResponse.data.content;
-    obj.totalSupply = data.fields.total_supply;
-    obj.activeSupply = data.fields.active_supply;
+    obj.totalSupply = data.fields.total_supply / SUI_COIN_DECIMAL;
+    obj.activeSupply = data.fields.active_supply / SUI_COIN_DECIMAL;
   }
   return obj;
 }
 
 // 取得 用戶質押資訊 列表
-export async function getUserStakeInfoList(address: string, canClaimRoundWinnerList: any[]){
-  let usrStakeInfoList: any[] = [];
+export async function getUserStakeInfoList(
+  address: string, 
+  canClaimRoundWinnerList: any[],
+  totalSupplyMap: Map<any, any>
+){
+  let userStakeTicketList: any[] = [];
 
   let objectResponse: any = await suiClient.getOwnedObjects({
     owner: address,
@@ -308,27 +312,28 @@ export async function getUserStakeInfoList(address: string, canClaimRoundWinnerL
 
   if (objectResponse.data) {
     objectResponse.data.forEach((resp: any) => {
-      let usrStakeInfo: any = new Object();
-      usrStakeInfo.id = resp.data.content.fields.id.id;
+      let userStakeTicket: any = new Object();
+      userStakeTicket.id = resp.data.content.fields.id.id;
       let startNum = resp.data.content.fields.start_num;
       let endNum = resp.data.content.fields.end_num;
       let winnerInfoList: any[] = [];
-      usrStakeInfo.winnerInfoList = winnerInfoList;
+      userStakeTicket.winnerInfoList = winnerInfoList;
       for (let winnerInfo of canClaimRoundWinnerList){
         let luckNum = winnerInfo.luckNum;
         if (luckNum >= startNum && luckNum <= endNum){
           winnerInfoList.push(winnerInfo);
         }
       }
-      usrStakeInfo.startNum = startNum;
-      usrStakeInfo.endNum = endNum;
-      usrStakeInfo.suiAmount = (Number(endNum) - Number(startNum) + 1) / SUI_COIN_DECIMAL;
-      usrStakeInfo.poolType = resp.data.content.type.split(",")[0].split("::")[4];
-      usrStakeInfoList.push(usrStakeInfo);
+      userStakeTicket.startNum = startNum;
+      userStakeTicket.endNum = endNum;
+      userStakeTicket.poolType = resp.data.content.type.split(",")[0].split("::")[4];
+      userStakeTicket.amount = (Number(endNum) - Number(startNum) + 1) / SUI_COIN_DECIMAL;
+      userStakeTicket.luckRate = (userStakeTicket.amount / totalSupplyMap.get(userStakeTicket.poolType)) * 100;
+      userStakeTicketList.push(userStakeTicket);
     });
   }
 
-  return usrStakeInfoList;
+  return userStakeTicketList;
 }
 
 // 取得 Table 內的資料

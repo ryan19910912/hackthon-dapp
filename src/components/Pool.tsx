@@ -24,7 +24,7 @@ export function Pool() {
 
   const [defaultPoolType, setDefaultPoolType] = useState("");
   const [poolType, setPoolType] = useState("");
-  const [userStakeInfoList, setUserStakeInfoList] = useState(new Array<any>());
+  const [userStakeTicketList, setUserStakeTicketList] = useState(new Array<any>());
   const [prepareDuration, setPrepareDuration] = useState(0);
   const [lockStateDuration, setLockStateDuration] = useState(0);
   const [rewardDuration, setRewardDuration] = useState(0);
@@ -38,16 +38,18 @@ export function Pool() {
 
   useEffect(() => {
     if (account) {
-      getPoolInfoList().then((resp) => {
+      getPoolInfoList().then((resp: any) => {
         setPoolList(resp);
         let canClaimRoundWinnerList: any[] = [];
+        let totalSupplyMap: Map<any, any> = new Map();
         resp.map((poolInfo: any) => {
           canClaimRoundWinnerList.push.apply(canClaimRoundWinnerList, poolInfo.canClaimRoundWinnerList);
+          totalSupplyMap.set(poolInfo.poolType, poolInfo.shareSupplyInfo.totalSupply);
         });
         console.log(resp);
-        getUserStakeInfoList(account.address, canClaimRoundWinnerList).then((resp) => {
+        getUserStakeInfoList(account.address, canClaimRoundWinnerList, totalSupplyMap).then((resp) => {
           console.log(resp);
-          setUserStakeInfoList(resp);
+          setUserStakeTicketList(resp);
         });
       });
       let poolTypeEnum: any = getPoolTypeEnum();
@@ -268,10 +270,10 @@ export function Pool() {
                     Reward Ratio : {pool.rewardAllocate.rewardRatio} %
                   </Flex>
                   <Flex>
-                    Active Supply : {pool.shareSupplyInfo?.activeSupply}
+                    Active Supply : {pool.shareSupplyInfo?.activeSupply} SUI
                   </Flex>
                   <Flex>
-                    Total Supply : {pool.shareSupplyInfo?.totalSupply}
+                    Total Supply : {pool.shareSupplyInfo?.totalSupply} SUI
                   </Flex>
 
                   {
@@ -422,29 +424,32 @@ export function Pool() {
             <div> No Data </div>
           }
 
-          <Heading mb="2">User Statke Info List :</Heading>
+          <Heading mb="2">User Statke Info :</Heading>
           {
-            userStakeInfoList.length > 0
+            userStakeTicketList.length > 0
               ?
-              userStakeInfoList.map<any>((userStakeInfo: any, index) => {
+              userStakeTicketList.map<any>((userStakeTicket: any, index) => {
                 return (
                   <div key={index} style={{ border: '5px solid green', padding: 10 }}>
                     <Flex>
-                      Pool Type : {userStakeInfo.poolType}
+                      Pool Type : {userStakeTicket.poolType}
                     </Flex>
                     <Flex>
-                      Start Num : {userStakeInfo.startNum}
+                      Start Num : {userStakeTicket.startNum}
                     </Flex>
                     <Flex>
-                      End Num : {userStakeInfo.endNum}
+                      End Num : {userStakeTicket.endNum}
                     </Flex>
                     <Flex>
-                      Stake SUI Amount : {userStakeInfo.suiAmount} SUI
+                      Luck Rate : {userStakeTicket.luckRate} %
+                    </Flex>
+                    <Flex>
+                      Stake SUI Amount : {userStakeTicket.amount} SUI
                     </Flex>
                     <Flex>
                       <Button className="Button violet" onClick={() => packWithdrawTxb(
-                        userStakeInfo.poolType,
-                        userStakeInfo.id
+                        userStakeTicket.poolType,
+                        userStakeTicket.id
                       ).then((txb) => {
                         if (txb) {
                           signAndExecuteTransactionBlock(
@@ -474,13 +479,13 @@ export function Pool() {
                       </Button>
                     </Flex>
                     {
-                      userStakeInfo.winnerInfoList.length > 0
+                      userStakeTicket.winnerInfoList.length > 0
                         ?
                         <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
                           <h3>Bingo !!!</h3>
                           <Button className="Button violet" onClick={() => packClaimRewardTxb(
-                            userStakeInfo.id,
-                            userStakeInfo.winnerInfoList
+                            userStakeTicket.id,
+                            userStakeTicket.winnerInfoList
                           ).then((txb) => {
                             if (txb) {
                               signAndExecuteTransactionBlock(
