@@ -6,6 +6,12 @@ import {
   HttpCachingChain,
 } from 'drand-client'
 
+enum PoolTypeEnum {
+  VALIDATOR = "VALIDATOR",
+  BUCKET_PROTOCOL = "BUCKET_PROTOCOL",
+  SCALLOP_PROTOCOL = "SCALLOP_PROTOCOL"
+}
+
 // 智能合約地址
 const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
 // 全域設定 Share Object 地址
@@ -25,6 +31,8 @@ const FUN_NEW_SHARE_NUMBER_POOL: string = "new_and_share_number_pool_and_share_s
 
 // 驗證適配器 module 名稱
 const MODULE_VALIDATOR_ADAPTER: string = "validator_adapter";
+const MODULE_BUCKET_ADAPTER: string = "bucket_adapter";
+const MODULE_SCALLOP_ADAPTER: string = "scallop_adapter"
 // 方法名稱 : 質押
 const FUN_STAKE: string = "stake";
 // 方法名稱 : 提取
@@ -34,47 +42,79 @@ const FUN_ALLOCATE_REWARDS: string = "allocate_reward";
 // 方法名稱 : 領取獎勵
 const FUN_CLAIM_REWARD: string = "claim_reward";
 
+const vaildatorConfig: any = JSON.parse(`${import.meta.env.VITE_VALIDATOR_CONFIG}`);
+const bucketConfig: any = JSON.parse(`${import.meta.env.VITE_BUCKET_CONFIG}`);
+const scallopConfig: any = JSON.parse(`${import.meta.env.VITE_SCALLOP_CONFIG}`);
+
+const poolTypeConfigMap: any = new Map<any, any>();
+poolTypeConfigMap.set(vaildatorConfig.poolType, vaildatorConfig);
+poolTypeConfigMap.set(bucketConfig.poolType, bucketConfig);
+poolTypeConfigMap.set(scallopConfig.poolType, scallopConfig);
+
+const poolAddressConfigMap: any = new Map<any, any>();
+poolAddressConfigMap.set(vaildatorConfig.pool, vaildatorConfig);
+poolAddressConfigMap.set(bucketConfig.pool, bucketConfig);
+poolAddressConfigMap.set(scallopConfig.pool, scallopConfig);
+
 // SUI 時間 Share Object 地址
 const SUI_CLOCK_ID: string = "0x6";
 // SUI System state Share Object 地址
 const SUI_SYSTEM_STATE_ID: string = "0x5";
 // SUI Coin Type
 const SUI_COIN_TYPE: string = "0x2::sui::SUI";
+// BUCK Coin Type
+const BUCK_COIN_TYPE: string = `${import.meta.env.VITE_BUCK_COIN_TYPE}`;
+// SBUCK Coin Type
+const SBUCK_COIN_TYPE: string = `${import.meta.env.VITE_SBUCK_COIN_TYPE}`;
+
+// Bucket 所需要的參數
+const BUCKET_FLASK: string = `${import.meta.env.VITE_BUCKET_FLASK}`;
+const BUCKET_FOUTAIN: string = `${import.meta.env.VITE_BUCKET_FOUTAIN}`;
+const BUCKET_LOCK_TIME: number = Number(`${import.meta.env.VITE_BUCKET_LOCK_TIME}`);
+
 // SUI Coin NATIVE_TYP
-const SUI_COIN_NATIVE_TYPE: string = `0x2::coin::Coin<${SUI_COIN_TYPE}>`;
+const COIN_TYPE: string = `0x2::coin::Coin`;
 const STAKE_POOL_SHARE_TYPE: string = "StakedPoolShare";
 // SUI Coin Decimal
 const SUI_COIN_DECIMAL = 1_000_000_000;
+const BUCK_COIN_DECIMAL = 1_000_000_000;
 
-enum PoolTypeEnum {
-  "Validtor" = "VALIDATOR",
-  "Bucket" = "BUCKET_PROTOCOL",
-  "Scallop" = "SCALLOP_PROTOCOL"
-}
-
-const vaildatorConfig: any = JSON.parse(`${import.meta.env.VITE_VALIDATOR_CONFIG}`);
-const bucketConfig: any = JSON.parse(`${import.meta.env.VITE_BUCKET_CONFIG}`);
-const scallopConfig: any = JSON.parse(`${import.meta.env.VITE_SCALLOP_CONFIG}`);
-
-const poolTypeConfigMap = new Map<any, any>();
-poolTypeConfigMap.set(PoolTypeEnum.Validtor, vaildatorConfig);
-poolTypeConfigMap.set(PoolTypeEnum.Bucket, bucketConfig);
-poolTypeConfigMap.set(PoolTypeEnum.Scallop, scallopConfig);
-
-const poolAddressConfigMap = new Map<any, any>();
-poolAddressConfigMap.set(vaildatorConfig.pool, vaildatorConfig);
-poolAddressConfigMap.set(bucketConfig.pool, bucketConfig);
-poolAddressConfigMap.set(scallopConfig.pool, scallopConfig);
-
+const poolTypeCommonTypeMap: any = new Map();
 let filters: SuiObjectDataFilter[] = [];
-let poolTypeEnum: any = PoolTypeEnum;
-Object.keys(poolTypeEnum).map((key) => {
+Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
+  console.log(poolType)
+  let nativeType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+  let rewardType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+  let decimal: number = SUI_COIN_DECIMAL;
+  let coinType: string = SUI_COIN_TYPE;
+  let coinName: string = "SUI";
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
+      break;
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+      nativeType = `${COIN_TYPE}<${BUCK_COIN_TYPE}>`;
+      decimal = BUCK_COIN_DECIMAL;
+      coinType = BUCK_COIN_TYPE;
+      coinName = "BUCK";
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+      nativeType = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+      coinName = "SCA";
+      break;
+  }
+  let structType = `${PACKAGE_ID}::${MODULE_STAKED_SHARE}::${STAKE_POOL_SHARE_TYPE}
+    <${PACKAGE_ID}::${MODULE_POOL}::${poolType},${nativeType}, ${rewardType}>`;
   let filter: SuiObjectDataFilter = {
-    StructType: `${PACKAGE_ID}::${MODULE_STAKED_SHARE}::${STAKE_POOL_SHARE_TYPE}
-    <${PACKAGE_ID}::${MODULE_POOL}::${poolTypeEnum[key]},
-    ${SUI_COIN_NATIVE_TYPE}, ${SUI_COIN_NATIVE_TYPE}>`
+    StructType: structType
   }
   filters.push(filter);
+  poolTypeCommonTypeMap.set(poolType, {
+    nativeType: nativeType,
+    rewardType: rewardType,
+    decimal: decimal,
+    coinType: coinType,
+    coinName: coinName
+  });
 });
 
 const suiClient = new SuiClient({
@@ -95,8 +135,9 @@ const options = {
 const chain = new HttpCachingChain(`${chainUrl}${chainHash}`, options);
 const drandClient = new HttpChainClient(chain, options)
 
-export function getPoolTypeEnum(){
-  return PoolTypeEnum;
+export function getPoolTypeList() {
+  console.log(Array.from(poolTypeConfigMap.keys()));
+  return Array.from(poolTypeConfigMap.keys());
 }
 
 // 構建 新建Pool 交易區塊
@@ -112,10 +153,12 @@ export async function packNewPoolTxb(
 ) {
   let txb: TransactionBlock = new TransactionBlock();
 
+  let nativeType: string = poolTypeCommonTypeMap.get(poolType).nativeType;
+  let rewardType: string = poolTypeCommonTypeMap.get(poolType).rewardType;
+
   let typeArgs = [
     `${PACKAGE_ID}::${MODULE_POOL}::${poolType}`,
-    SUI_COIN_NATIVE_TYPE,
-    SUI_COIN_NATIVE_TYPE
+    nativeType, rewardType
   ];
 
   let newPoolArgs: TransactionArgument[] = [
@@ -147,10 +190,12 @@ export async function packNewNumberPoolTxb(
 ) {
   let txb: TransactionBlock = new TransactionBlock();
 
+  let nativeType: string = poolTypeCommonTypeMap.get(poolType).nativeType;
+  let rewardType: string = poolTypeCommonTypeMap.get(poolType).rewardType;
+
   let typeArgs = [
     `${PACKAGE_ID}::${MODULE_POOL}::${poolType}`,
-    SUI_COIN_NATIVE_TYPE,
-    SUI_COIN_NATIVE_TYPE
+    nativeType, rewardType
   ];
 
   let newPoolArgs: TransactionArgument[] = [
@@ -167,16 +212,27 @@ export async function packNewNumberPoolTxb(
   return txb;
 }
 
-// 取得 pool 資訊 列表
-export async function getPoolInfoList() {
+// 取得 pool 資訊
+export async function getPoolInfo() {
+
+  let poolInfo: any = new Object();
 
   let poolList: Object[] = new Array<Object>();
+  poolInfo.poolList = poolList;
+
+  // 存放可以領獎的得獎者 陣列 
+  // {poolId, round, luckNum}
+  let canClaimRoundWinnerList: any[] = [];
+  poolInfo.canClaimRoundWinnerList = canClaimRoundWinnerList;
+
+  let totalSupplyMap: Map<any, any> = new Map();
+  poolInfo.totalSupplyMap = totalSupplyMap;
 
   if (poolAddressConfigMap.size > 0) {
 
     for (let poolConfig of poolAddressConfigMap.values()) {
 
-      if (poolConfig.pool === ""){
+      if (poolConfig.pool === "") {
         continue;
       }
 
@@ -195,14 +251,15 @@ export async function getPoolInfoList() {
         console.log(poolData);
 
         poolObject.poolId = poolData.fields.id.id;
-        poolObject.poolType = poolData.type.split(",")[0].split("::")[4];
+        poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
+        poolObject.coinName = poolTypeCommonTypeMap.get(poolObject.poolType).coinName;
 
         // 獎勵分配設定
         let rewardAllocate: any = new Object();
-        rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio)/100).toFixed(2);
+        rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio) / 100).toFixed(2);
         rewardAllocate.allocateUserAmount = poolData.fields.reward_allocate.fields.allocate_user_amount
-        rewardAllocate.platformRatio = (parseFloat(poolData.fields.reward_allocate.fields.platform_ratio)/100).toFixed(2);
-        rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio)/100).toFixed(2);
+        rewardAllocate.platformRatio = (parseFloat(poolData.fields.reward_allocate.fields.platform_ratio) / 100).toFixed(2);
+        rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio) / 100).toFixed(2);
         poolObject.rewardAllocate = rewardAllocate;
 
         // 時間設定
@@ -223,60 +280,99 @@ export async function getPoolInfoList() {
         poolObject.needNewNumberPool = poolConfig.numberPool === "";
 
         poolObject.timeInfo = timeInfo;
-        if (poolConfig.shareSupply !== ""){
-          poolObject.shareSupplyInfo = await getShareSupply(poolConfig.shareSupply);
+        if (poolConfig.shareSupply !== "") {
+          console.log(poolObject.poolType);
+          console.log(poolTypeCommonTypeMap);
+          console.log(poolTypeCommonTypeMap.get(poolObject.poolType));
+          let decimal = poolTypeCommonTypeMap.get(poolObject.poolType)?.decimal;
+          poolObject.shareSupplyInfo = await getShareSupply(poolConfig.shareSupply, decimal);
+          totalSupplyMap.set(poolObject.poolType, poolObject.shareSupplyInfo.totalSupply);
         }
 
         // 已領取獎勵的Map<round, address>
         let claimedMap = await getTableData(poolData.fields.claimed.fields.id.id);
         poolObject.claimedMap = claimedMap;
 
-        // 存放可以領獎的得獎者 陣列 
-        // {poolId, round, luckNum}
-        let canClaimRoundWinnerList: any = [];
-        poolObject.canClaimRoundWinnerList = canClaimRoundWinnerList;
+        let claimRoundWinnerList: any = [];
+        poolObject.claimRoundWinnerList = claimRoundWinnerList;
 
         let dynamicFieldsResp = await suiClient.getDynamicFields({
           parentId: poolConfig.pool,
         });
 
-        if (dynamicFieldsResp.data){
+        if (dynamicFieldsResp.data) {
           let array = dynamicFieldsResp.data;
-          for (let dynamicFields of array){
-            if (dynamicFields.objectType === "u64"){
+          let expireTimeMap: any = new Map();
+          for (let dynamicFields of array) {
+            if (dynamicFields.objectType === "u64") {
+              // 得獎 round - 幸運號碼
               let winnerObjResp = await suiClient.getObject({
                 id: dynamicFields.objectId,
                 options: {
                   showContent: true
                 }
               });
-              if (winnerObjResp.data?.content){
+              if (winnerObjResp.data?.content) {
                 let dataContent: any = winnerObjResp.data.content;
                 let round = dataContent.fields.name;
-                if (claimedMap && claimedMap.has(round)){
-                  continue;
-                }
-                canClaimRoundWinnerList.push(
+                claimRoundWinnerList.push(
                   {
-                    poolId : poolObject.poolId,
-                    round : round,
-                    luckNum : dataContent.fields.value
+                    poolId: poolObject.poolId,
+                    round: round,
+                    luckNum: dataContent.fields.value
                   }
                 );
               }
+            } else if (dynamicFields.name.type === `${PACKAGE_ID}::pool::ClaimExpiredTime`){
+              // 取得到期時間
+              let expireDynamicFieldsResp = await suiClient.getDynamicFields({
+                parentId: dynamicFields.objectId,
+              });
+              if (expireDynamicFieldsResp.data) {
+                let expireDynamicFieldDataArray = expireDynamicFieldsResp.data;
+                for (let expireDynamicFieldData of expireDynamicFieldDataArray) {
+                  let expireData = await suiClient.getObject({
+                    id: expireDynamicFieldData.objectId,
+                    options: {
+                      showContent: true
+                    }
+                  });
+                  if (expireData.data?.content) {
+                    let expireDataContent: any = expireData.data.content;
+                    expireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
+                  }
+                }
+              }
             }
           }
+          // 檢查是否過期
+          let nowTime = new Date();
+          for (let claimRoundWinner of claimRoundWinnerList){
+            if (claimedMap && claimedMap.has(claimRoundWinner.round)) {
+              continue;
+            }
+            let expireTime = expireTimeMap.get(claimRoundWinner.round);
+            if (expireTime){
+              if (nowTime > new Date(Number(expireTime))){
+                console.log(`round ${claimRoundWinner.round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+                continue;
+              }
+            }
+            canClaimRoundWinnerList.push(claimRoundWinner);
+          }
+
         }
+
         poolList.push(poolObject);
       }
     }
   }
 
-  return poolList;
+  return poolInfo;
 }
 
 // 取得 供應 資訊
-async function getShareSupply(shareSupplyId: string) {
+async function getShareSupply(shareSupplyId: string, decimal: number) {
   let objectResponse = await suiClient.getObject({
     id: shareSupplyId,
     options: {
@@ -286,18 +382,18 @@ async function getShareSupply(shareSupplyId: string) {
   let obj: any = new Object();
   if (objectResponse.data?.content) {
     let data: any = objectResponse.data.content;
-    obj.totalSupply = data.fields.total_supply / SUI_COIN_DECIMAL;
-    obj.activeSupply = data.fields.active_supply / SUI_COIN_DECIMAL;
+    obj.totalSupply = data.fields.total_supply / decimal;
+    obj.activeSupply = data.fields.active_supply / decimal;
   }
   return obj;
 }
 
-// 取得 用戶質押資訊 列表
-export async function getUserStakeInfoList(
-  address: string, 
+// 取得 用戶質押票券資訊 列表
+export async function getUserStakeTicketList(
+  address: string,
   canClaimRoundWinnerList: any[],
   totalSupplyMap: Map<any, any>
-){
+) {
   let userStakeTicketList: any[] = [];
 
   let objectResponse: any = await suiClient.getOwnedObjects({
@@ -318,15 +414,17 @@ export async function getUserStakeInfoList(
       let endNum = resp.data.content.fields.end_num;
       let winnerInfoList: any[] = [];
       userStakeTicket.winnerInfoList = winnerInfoList;
-      for (let winnerInfo of canClaimRoundWinnerList){
+      for (let winnerInfo of canClaimRoundWinnerList) {
         let luckNum = winnerInfo.luckNum;
-        if (luckNum >= startNum && luckNum <= endNum){
+        console.log(luckNum);
+        if (Number(luckNum) >= Number(startNum) && Number(luckNum) <= Number(endNum)) {
           winnerInfoList.push(winnerInfo);
         }
       }
       userStakeTicket.startNum = startNum;
       userStakeTicket.endNum = endNum;
       userStakeTicket.poolType = resp.data.content.type.split(",")[0].split("::")[4];
+      userStakeTicket.coinName = poolTypeCommonTypeMap.get(userStakeTicket.poolType).coinName;
       userStakeTicket.amount = (Number(endNum) - Number(startNum) + 1) / SUI_COIN_DECIMAL;
       userStakeTicket.luckRate = (userStakeTicket.amount / totalSupplyMap.get(userStakeTicket.poolType)) * 100;
       userStakeTicketList.push(userStakeTicket);
@@ -387,42 +485,93 @@ export async function packStakeTxb(
 ) {
 
   let poolConfig = poolAddressConfigMap.get(poolId);
+  let poolType = poolConfig.poolType;
 
   let txb: TransactionBlock = new TransactionBlock();
 
-  let coinBalance: CoinBalance = await suiClient.getBalance({
+  let validatorAddress = await getTopValidatorAddress();
+  console.log("validatorAddress = " + validatorAddress);
+
+  let args: TransactionArgument[] = [];
+  let typeArgs: any[];
+  let decimal = poolTypeCommonTypeMap.get(poolType).decimal;
+  let coinType = poolTypeCommonTypeMap.get(poolType).coinType;
+  let coinObjectId: string = "";
+
+  let walletCoinResp: any = await suiClient.getCoins({
     owner: address,
-    coinType: SUI_COIN_TYPE
+    coinType: coinType
   });
 
-  let stakeCoinAmount: number = Number((stakeAmount * SUI_COIN_DECIMAL));
+  console.log(walletCoinResp);
 
-  if (Number(coinBalance.totalBalance) < stakeCoinAmount) {
-    alert("Not Enough Balance.");
+  let stakeCoinAmount: number = Number((stakeAmount * decimal));
+
+  for (let coinInfo of walletCoinResp.data){
+    if (coinInfo.balance > stakeCoinAmount){
+      coinObjectId = coinInfo.coinObjectId;
+      break;
+    }
   }
 
-  const [coins] = txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]);
+  if (coinObjectId === "") {
+    alert("Not Enough Balance.");
+  };
 
-  let validatorAddress = await getTopValidatorAddress();
-  console.log("validatorAddress = "+validatorAddress);
+  console.log(coinObjectId);
 
-  let args: TransactionArgument[] = [
-    txb.object(GLOBAL_CONFIG_ID),
-    txb.object(poolConfig.shareSupply),
-    txb.object(poolAddressConfigMap.get(poolId).numberPool),
-    txb.object(poolId),
-    txb.object(SUI_SYSTEM_STATE_ID),
-    coins,
-    txb.pure(validatorAddress),
-    txb.object(SUI_CLOCK_ID)
-  ];
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
 
-  txb.setSender(address);
+      args = [
+        txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolConfig.numberPool),
+        txb.object(poolId),
+        txb.object(SUI_SYSTEM_STATE_ID),
+        txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]),
+        txb.pure(validatorAddress),
+        txb.object(SUI_CLOCK_ID)
+      ];
 
-  txb.moveCall({
-    target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_STAKE}`,
-    arguments: args
-  });
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_STAKE}`,
+        arguments: args
+      });
+      break;
+
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+
+      typeArgs = [
+        BUCK_COIN_TYPE,
+        SUI_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolConfig.numberPool),
+        txb.object(poolId),
+        txb.object(BUCKET_FLASK),
+        txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]),
+        txb.object(BUCKET_FOUTAIN),
+        txb.pure.u64(BUCKET_LOCK_TIME),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_STAKE}`,
+        typeArguments: typeArgs,
+        arguments: args
+      });
+      break;
+
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+
+      break;
+  }
+
+  console.log(args);
 
   return txb;
 }
@@ -437,18 +586,58 @@ export async function packWithdrawTxb(
 
   let poolConfig = poolTypeConfigMap.get(poolType);
 
-  let args: TransactionArgument[] = [
-    txb.object(poolConfig.shareSupply),
-    txb.object(poolConfig.numberPool),
-    txb.object(poolConfig.pool),
-    txb.object(stakePoolShareId),
-    txb.object(SUI_SYSTEM_STATE_ID)
-  ];
+  let args: TransactionArgument[] = [];
+  let typeArgs: any[];
 
-  txb.moveCall({
-    target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
-    arguments: args
-  });
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
+
+      args = [
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolConfig.numberPool),
+        txb.object(poolConfig.pool),
+        txb.object(stakePoolShareId),
+        txb.object(SUI_SYSTEM_STATE_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
+        arguments: args
+      });
+
+      break;
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+
+      typeArgs = [
+        BUCK_COIN_TYPE,
+        SUI_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolConfig.numberPool),
+        txb.object(poolConfig.pool),
+        txb.object(SUI_CLOCK_ID),
+        txb.object(BUCKET_FLASK),
+        txb.object(BUCKET_FOUTAIN),
+        txb.object(stakePoolShareId),
+        txb.pure.u64(BUCKET_LOCK_TIME)
+      ];
+
+      console.log(args);
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_WITHDRAW}`,
+        arguments: args,
+        typeArguments: typeArgs
+      });
+
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+      break;
+  }
+
+  console.log(args);
 
   return txb;
 }
@@ -458,9 +647,13 @@ export async function packAllocateRewardsTxb(
   poolId: string
 ) {
 
-  let poolType = poolAddressConfigMap.get(poolId);
+  let poolConfig = poolAddressConfigMap.get(poolId);
+  let poolType = poolConfig.poolType;
 
   let txb: TransactionBlock = new TransactionBlock();
+
+  let args: TransactionArgument[];
+  let typeArgs: any[];
 
   const theLatestBeacon = await fetchBeaconByTime(drandClient, Date.now())
 
@@ -469,46 +662,116 @@ export async function packAllocateRewardsTxb(
 
   let validatorAddress = await getTopValidatorAddress();
 
-  let args: TransactionArgument[] = [
-    txb.object(GLOBAL_CONFIG_ID),
-    txb.object(poolType.shareSupply),
-    txb.object(SUI_SYSTEM_STATE_ID),
-    txb.object(poolId),
-    txb.pure.address(validatorAddress),
-    txb.pure.u64(drand_round),
-    txb.pure(byteArray),
-    txb.object(SUI_CLOCK_ID)
-  ];
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
 
-  txb.moveCall({
-    target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_ALLOCATE_REWARDS}`,
-    arguments: args
-  });
+      args = [
+        txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(SUI_SYSTEM_STATE_ID),
+        txb.object(poolId),
+        txb.pure.address(validatorAddress),
+        txb.pure.u64(drand_round),
+        txb.pure(byteArray),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_ALLOCATE_REWARDS}`,
+        arguments: args
+      });
+
+      break;
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+
+      typeArgs = [
+        BUCK_COIN_TYPE,
+        SUI_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolId),
+        txb.object(BUCKET_FOUTAIN),
+        txb.pure.u64(drand_round),
+        txb.pure(byteArray),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_ALLOCATE_REWARDS}`,
+        arguments: args,
+        typeArguments: typeArgs
+      });
+
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+      break;
+  }
 
   return txb;
 }
 
 // 建構 領取獎勵 的交易區塊
 export async function packClaimRewardTxb(
+  poolType: string,
   stakedShareId: string,
   winnerInfoList: any[]
 ) {
 
   let txb: TransactionBlock = new TransactionBlock();
 
-  for (let winnerInfo of winnerInfoList){
-    let args: TransactionArgument[] = [
-      txb.object(winnerInfo.poolId),
-      txb.pure.u64(winnerInfo.round),
-      txb.makeMoveVec({objects: [stakedShareId]}),
-      txb.object(SUI_CLOCK_ID)
-    ];
+  for (let winnerInfo of winnerInfoList) {
+
+    console.log(winnerInfo);
+
+    let args: TransactionArgument[];
+    let typeArgs: any[];
+
+    switch (poolType) {
+      case PoolTypeEnum.VALIDATOR:
   
-    txb.moveCall({
-      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
-      arguments: args
-    });
+        args = [
+          txb.object(winnerInfo.poolId),
+          txb.pure(winnerInfo.round),
+          txb.makeMoveVec({ objects: [stakedShareId] }),
+          txb.object(SUI_CLOCK_ID)
+        ];
+  
+        txb.moveCall({
+          target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
+          arguments: args
+        });
+  
+        break;
+      case PoolTypeEnum.BUCKET_PROTOCOL:
+  
+        typeArgs = [
+          BUCK_COIN_TYPE,
+          SUI_COIN_TYPE
+        ]
+
+        args = [
+          txb.object(winnerInfo.poolId),
+          txb.pure(winnerInfo.round),
+          txb.makeMoveVec({ objects: [stakedShareId] }),
+          txb.object(SUI_CLOCK_ID)
+        ];
+  
+        txb.moveCall({
+          target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_CLAIM_REWARD}`,
+          arguments: args,
+          typeArguments: typeArgs
+        });
+  
+        break;
+      case PoolTypeEnum.SCALLOP_PROTOCOL:
+        break;
+    }
   }
+
+  console.log(txb.blockData)
 
   return txb;
 }
@@ -518,9 +781,9 @@ async function getTopValidatorAddress() {
   let objectResponse = await suiClient.getValidatorsApy();
   let address: string = "";
   let apy: number = 0;
-  if (objectResponse.apys){
+  if (objectResponse.apys) {
     objectResponse.apys.map((apyObj: any) => {
-      if (apyObj.apy > apy){
+      if (apyObj.apy > apy) {
         apy = apyObj.apy;
         address = apyObj.address;
       }

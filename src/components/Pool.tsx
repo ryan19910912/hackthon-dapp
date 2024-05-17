@@ -1,11 +1,11 @@
 import { useCurrentAccount, useSignAndExecuteTransactionBlock } from "@mysten/dapp-kit";
 import { Container, Flex, Heading, Text, Button } from "@radix-ui/themes";
 import {
-  getPoolTypeEnum,
-  getUserStakeInfoList,
+  getPoolTypeList,
+  getUserStakeTicketList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
-  getPoolInfoList,
+  getPoolInfo,
   packStakeTxb,
   packWithdrawTxb,
   packAllocateRewardsTxb,
@@ -34,34 +34,22 @@ export function Pool() {
   const [allocateGasPayerRatio, setAllocateGasPayerRatio] = useState(0);
   const [poolList, setPoolList] = useState(new Array<any>());
   const [stakeAmount, setStakeAmount] = useState(0);
-  const [poolTypeMap, setPoolTypeMap] = useState(new Map());
+  const [poolTypeList, setPoolTypeList] = useState([]);
 
   useEffect(() => {
     if (account) {
-      getPoolInfoList().then((resp: any) => {
-        setPoolList(resp);
-        let canClaimRoundWinnerList: any[] = [];
-        let totalSupplyMap: Map<any, any> = new Map();
-        resp.map((poolInfo: any) => {
-          canClaimRoundWinnerList.push.apply(canClaimRoundWinnerList, poolInfo.canClaimRoundWinnerList);
-          totalSupplyMap.set(poolInfo.poolType, poolInfo.shareSupplyInfo.totalSupply);
-        });
-        console.log(resp);
-        getUserStakeInfoList(account.address, canClaimRoundWinnerList, totalSupplyMap).then((resp) => {
-          console.log(resp);
-          setUserStakeTicketList(resp);
-        });
+      getPoolInfo().then((poolInfo: any) => {
+        console.log(poolInfo);
+        setPoolList(poolInfo.poolList);
+        getUserStakeTicketList(account.address, poolInfo.canClaimRoundWinnerList, poolInfo.totalSupplyMap)
+          .then((userStakeInfoList) => {
+            console.log(userStakeInfoList);
+            setUserStakeTicketList(userStakeInfoList);
+          });
       });
-      let poolTypeEnum: any = getPoolTypeEnum();
-      let poolTypeMap = new Map();
-      Object.keys(poolTypeEnum).map((key, index) => {
-        if (index == 0) {
-          setDefaultPoolType(poolTypeEnum[key]);
-          setPoolType(poolTypeEnum[key]);
-        }
-        poolTypeMap.set(key, poolTypeEnum[key]);
-      });
-      setPoolTypeMap(poolTypeMap);
+      let poolTypeList: any = getPoolTypeList();
+      setDefaultPoolType(poolTypeList[0])
+      setPoolTypeList(poolTypeList);
     }
   }, [account]);
 
@@ -109,11 +97,11 @@ export function Pool() {
                   </label>
                   <select className="Select" onChange={(e) => setPoolType(e.target.value)} defaultValue={poolType}>
                     {
-                      poolTypeMap.size > 0
+                      poolTypeList.length > 0
                         ?
-                        Array.from(poolTypeMap.keys()).map((key) => {
+                        poolTypeList.map((poolType) => {
                           return (
-                            <option key={key} value={poolTypeMap.get(key)}>{key}</option>
+                            <option key={poolType} value={poolType}>{poolType}</option>
                           )
                         })
                         :
@@ -270,10 +258,10 @@ export function Pool() {
                     Reward Ratio : {pool.rewardAllocate.rewardRatio} %
                   </Flex>
                   <Flex>
-                    Active Supply : {pool.shareSupplyInfo?.activeSupply} SUI
+                    Active Supply : {pool.shareSupplyInfo?.activeSupply} {pool.coinName}
                   </Flex>
                   <Flex>
-                    Total Supply : {pool.shareSupplyInfo?.totalSupply} SUI
+                    Total Supply : {pool.shareSupplyInfo?.totalSupply} {pool.coinName}
                   </Flex>
 
                   {
@@ -324,11 +312,11 @@ export function Pool() {
                           <Dialog.Content className="DialogContent">
                             <Dialog.Title className="DialogTitle">Stake</Dialog.Title>
                             <Dialog.Description className="DialogDescription">
-                              You can stake SUI coins in this pool.
+                              You can stake {pool.coinName} coins in this pool.
                             </Dialog.Description>
                             <fieldset className="Fieldset">
                               <label className="Label">
-                                Stake Amount (SUI)
+                                Stake Amount ({pool.coinName})
                               </label>
                               <input className="Input" type="number" value={stakeAmount} onChange={(e) => setStakeAmount(Number(e.target.value))} />
                             </fieldset>
@@ -432,6 +420,9 @@ export function Pool() {
                 return (
                   <div key={index} style={{ border: '5px solid green', padding: 10 }}>
                     <Flex>
+                      Stake Share ID : {userStakeTicket.id}
+                    </Flex>
+                    <Flex>
                       Pool Type : {userStakeTicket.poolType}
                     </Flex>
                     <Flex>
@@ -444,7 +435,7 @@ export function Pool() {
                       Luck Rate : {userStakeTicket.luckRate} %
                     </Flex>
                     <Flex>
-                      Stake SUI Amount : {userStakeTicket.amount} SUI
+                      Stake {userStakeTicket.coinName} Amount : {userStakeTicket.amount} {userStakeTicket.coinName}
                     </Flex>
                     <Flex>
                       <Button className="Button violet" onClick={() => packWithdrawTxb(
@@ -484,6 +475,7 @@ export function Pool() {
                         <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
                           <h3>Bingo !!!</h3>
                           <Button className="Button violet" onClick={() => packClaimRewardTxb(
+                            userStakeTicket.poolType,
                             userStakeTicket.id,
                             userStakeTicket.winnerInfoList
                           ).then((txb) => {
