@@ -4,7 +4,7 @@ import {
   getPoolTypeList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
-  getPoolInfo,
+  getPoolAndUserInfo,
   packStakeTxb,
   packWithdrawTxb,
   packAllocateRewardsTxb,
@@ -38,7 +38,7 @@ export function Pool() {
 
   useEffect(() => {
     if (account) {
-      getPoolInfo(account.address).then((poolInfo: any) => {
+      getPoolAndUserInfo(account.address).then((poolInfo: any) => {
         console.log(poolInfo);
         setPoolList(poolInfo.poolList);
         setUserStakeTicketList(poolInfo.userStakeTicketList);

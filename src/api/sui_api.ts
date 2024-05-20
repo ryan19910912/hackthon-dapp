@@ -220,7 +220,7 @@ export async function packNewNumberPoolTxb(
 }
 
 // 取得 pool 資訊
-export async function getPoolInfo(userAddress: any) {
+export async function getPoolAndUserInfo(userAddress: any) {
 
   let poolInfo: any = new Object();
 
