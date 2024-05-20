@@ -2,7 +2,6 @@ import { useCurrentAccount, useSignAndExecuteTransactionBlock } from "@mysten/da
 import { Container, Flex, Heading, Text, Button } from "@radix-ui/themes";
 import {
   getPoolTypeList,
-  getUserStakeTicketList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
   getPoolInfo,
@@ -34,18 +33,15 @@ export function Pool() {
   const [allocateGasPayerRatio, setAllocateGasPayerRatio] = useState(0);
   const [poolList, setPoolList] = useState(new Array<any>());
   const [stakeAmount, setStakeAmount] = useState(0);
+  const [withdrawAmount, setWithdrawAmount] = useState(0);
   const [poolTypeList, setPoolTypeList] = useState([]);
 
   useEffect(() => {
     if (account) {
-      getPoolInfo().then((poolInfo: any) => {
+      getPoolInfo(account.address).then((poolInfo: any) => {
         console.log(poolInfo);
         setPoolList(poolInfo.poolList);
-        getUserStakeTicketList(account.address, poolInfo.canClaimRoundWinnerList, poolInfo.totalSupplyMap)
-          .then((userStakeInfoList) => {
-            console.log(userStakeInfoList);
-            setUserStakeTicketList(userStakeInfoList);
-          });
+        setUserStakeTicketList(poolInfo.userStakeTicketList);
       });
       let poolTypeList: any = getPoolTypeList();
       setDefaultPoolType(poolTypeList[0])
@@ -62,10 +58,6 @@ export function Pool() {
     setPlatformRatio(0);
     setRewardRatio(0);
     setAllocateGasPayerRatio(0);
-  }
-
-  function resetStakeAmount() {
-    setStakeAmount(0);
   }
 
   return (
@@ -203,7 +195,7 @@ export function Pool() {
                               console.log('packNewPoolTxb success', successResult);
                             },
                             onError: (errorResult) => {
-                              console.log('packNewPoolTxb error', errorResult);
+                              console.error('packNewPoolTxb error', errorResult);
                             },
                           },
                         );
@@ -288,7 +280,7 @@ export function Pool() {
                                 console.log('executed transaction block success', successResult);
                               },
                               onError: (errorResult) => {
-                                console.log('executed transaction block error', errorResult);
+                                console.error('executed transaction block error', errorResult);
                               },
                             },
                           );
@@ -305,7 +297,7 @@ export function Pool() {
                       ?
                       <Dialog.Root>
                         <Dialog.Trigger asChild>
-                          <button className="Button violet" onClick={resetStakeAmount}>Stake</button>
+                          <button className="Button violet" onClick={() => setStakeAmount(0)}>Stake</button>
                         </Dialog.Trigger>
                         <Dialog.Portal>
                           <Dialog.Overlay className="DialogOverlay" />
@@ -346,7 +338,7 @@ export function Pool() {
                                           console.log('executed transaction block success', successResult);
                                         },
                                         onError: (errorResult) => {
-                                          console.log('executed transaction block error', errorResult);
+                                          console.error('executed transaction block error', errorResult);
                                         },
                                       },
                                     );
@@ -393,7 +385,7 @@ export function Pool() {
                                   console.log('executed transaction block success', successResult);
                                 },
                                 onError: (errorResult) => {
-                                  console.log('executed transaction block error', errorResult);
+                                  console.error('executed transaction block error', errorResult);
                                 },
                               },
                             );
@@ -438,37 +430,70 @@ export function Pool() {
                       Stake {userStakeTicket.coinName} Amount : {userStakeTicket.amount} {userStakeTicket.coinName}
                     </Flex>
                     <Flex>
-                      <Button className="Button violet" onClick={() => packWithdrawTxb(
-                        userStakeTicket.poolType,
-                        userStakeTicket.id
-                      ).then((txb) => {
-                        if (txb) {
-                          signAndExecuteTransactionBlock(
-                            {
-                              transactionBlock: txb,
-                              options: {
-                                showBalanceChanges: true,
-                                showObjectChanges: true,
-                                showEvents: true,
-                                showEffects: true,
-                                showInput: true,
-                                showRawInput: true
-                              }
-                            },
-                            {
-                              onSuccess: (successResult) => {
-                                console.log('executed transaction block success', successResult);
-                              },
-                              onError: (errorResult) => {
-                                console.log('executed transaction block error', errorResult);
-                              },
-                            },
-                          );
-                        }
-                      })}>
-                        Withdraw
-                      </Button>
+                      <Dialog.Root>
+                        <Dialog.Trigger asChild>
+                          <button className="Button violet" onClick={() => setWithdrawAmount(0)}>Withdraw</button>
+                        </Dialog.Trigger>
+                        <Dialog.Portal>
+                          <Dialog.Overlay className="DialogOverlay" />
+                          <Dialog.Content className="DialogContent">
+                            <Dialog.Title className="DialogTitle">Withdraw</Dialog.Title>
+                            <Dialog.Description className="DialogDescription">
+                              Withdraw {userStakeTicket.coinName} coins
+                            </Dialog.Description>
+                            <fieldset className="Fieldset">
+                              <label className="Label">
+                                Withdraw Amount ({userStakeTicket.coinName})
+                              </label>
+                              <input className="Input" type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(Number(e.target.value))} />
+                            </fieldset>
+
+                            <div style={{ display: 'flex', marginTop: 25, justifyContent: 'flex-end' }}>
+                              <Dialog.Close asChild>
+                                <Button className="Button violet" onClick={() => packWithdrawTxb(
+                                  userStakeTicket.poolType,
+                                  userStakeTicket.id,
+                                  userStakeTicket.amount,
+                                  withdrawAmount
+                                ).then((txb) => {
+                                  if (txb) {
+                                    signAndExecuteTransactionBlock(
+                                      {
+                                        transactionBlock: txb,
+                                        options: {
+                                          showBalanceChanges: true,
+                                          showObjectChanges: true,
+                                          showEvents: true,
+                                          showEffects: true,
+                                          showInput: true,
+                                          showRawInput: true
+                                        }
+                                      },
+                                      {
+                                        onSuccess: (successResult) => {
+                                          console.log('executed transaction block success', successResult);
+                                        },
+                                        onError: (errorResult) => {
+                                          console.error('executed transaction block error', errorResult);
+                                        },
+                                      },
+                                    );
+                                  }
+                                })}>
+                                  Withdraw
+                                </Button>
+                              </Dialog.Close>
+                            </div>
+                            <Dialog.Close asChild>
+                              <button className="IconButton" aria-label="Close">
+                                <Cross2Icon />
+                              </button>
+                            </Dialog.Close>
+                          </Dialog.Content>
+                        </Dialog.Portal>
+                      </Dialog.Root>
                     </Flex>
+
                     {
                       userStakeTicket.winnerInfoList.length > 0
                         ?
@@ -497,7 +522,7 @@ export function Pool() {
                                     console.log('executed transaction block success', successResult);
                                   },
                                   onError: (errorResult) => {
-                                    console.log('executed transaction block error', errorResult);
+                                    console.error('executed transaction block error', errorResult);
                                   },
                                 },
                               );
