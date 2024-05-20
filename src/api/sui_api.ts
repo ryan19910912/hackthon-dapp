@@ -257,6 +257,7 @@ export async function getPoolAndUserInfo(userAddress: any) {
         poolObject.poolId = poolData.fields.id.id;
         poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
         poolObject.coinName = poolTypeCommonTypeMap.get(poolObject.poolType).coinName;
+        poolObject.currentRound = poolData.fields.current_round;
 
         let decimal = poolTypeCommonTypeMap.get(poolObject.poolType)?.decimal;
 
