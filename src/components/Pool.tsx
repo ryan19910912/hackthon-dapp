@@ -226,6 +226,9 @@ export function Pool() {
                     Pool Type : {pool.poolType}
                   </Flex>
                   <Flex>
+                    Current Round : {pool.currentRound}
+                  </Flex>
+                  <Flex>
                     StartTime : {pool.timeInfo.startTime}
                   </Flex>
                   <Flex>
@@ -248,6 +251,9 @@ export function Pool() {
                   </Flex>
                   <Flex>
                     Reward Ratio : {pool.rewardAllocate.rewardRatio} %
+                  </Flex>
+                  <Flex>
+                    Total Stake Amount : {pool.statistics?.totalStakeAmount} {pool.coinName}
                   </Flex>
                   <Flex>
                     Active Supply : {pool.shareSupplyInfo?.activeSupply} {pool.coinName}

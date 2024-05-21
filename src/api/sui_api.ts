@@ -356,6 +356,7 @@ export async function getPoolAndUserInfo(userAddress: any) {
                   });
                   if (expireData.data?.content) {
                     let expireDataContent: any = expireData.data.content;
+                    console.log(expireDataContent.fields.name, expireDataContent.fields.value);
                     expireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
                   }
                 }
