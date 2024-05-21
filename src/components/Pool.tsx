@@ -4,11 +4,11 @@ import {
   getPoolTypeList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
-  getPoolAndUserInfo,
+  getPoolAndUserInfoV2,
   packStakeTxb,
-  packWithdrawTxb,
+  packWithdrawTxbV2,
   packAllocateRewardsTxb,
-  packClaimRewardTxb
+  packClaimRewardTxbV2
 } from "../api/sui_api";
 import { useState, useEffect } from 'react';
 
@@ -23,7 +23,7 @@ export function Pool() {
 
   const [defaultPoolType, setDefaultPoolType] = useState("");
   const [poolType, setPoolType] = useState("");
-  const [userStakeTicketList, setUserStakeTicketList] = useState(new Array<any>());
+  const [userStakeInfoMap, setUserStakeInfoMap] = useState(new Map<any, any>);
   const [prepareDuration, setPrepareDuration] = useState(0);
   const [lockStateDuration, setLockStateDuration] = useState(0);
   const [rewardDuration, setRewardDuration] = useState(0);
@@ -38,10 +38,10 @@ export function Pool() {
 
   useEffect(() => {
     if (account) {
-      getPoolAndUserInfo(account.address).then((poolInfo: any) => {
+      getPoolAndUserInfoV2(account.address).then((poolInfo: any) => {
         console.log(poolInfo);
         setPoolList(poolInfo.poolList);
-        setUserStakeTicketList(poolInfo.userStakeTicketList);
+        setUserStakeInfoMap(poolInfo.userStakeInfoMap);
       });
       let poolTypeList: any = getPoolTypeList();
       setDefaultPoolType(poolTypeList[0])
@@ -412,28 +412,19 @@ export function Pool() {
 
           <Heading mb="2">User Statke Info :</Heading>
           {
-            userStakeTicketList.length > 0
+            userStakeInfoMap?.size > 0
               ?
-              userStakeTicketList.map<any>((userStakeTicket: any, index) => {
+              Array.from(userStakeInfoMap.keys()).map((poolType: any, index: any) => {
                 return (
                   <div key={index} style={{ border: '5px solid green', padding: 10 }}>
                     <Flex>
-                      Stake Share ID : {userStakeTicket.id}
+                      Pool Type : {poolType}
                     </Flex>
                     <Flex>
-                      Pool Type : {userStakeTicket.poolType}
+                      Stake Total Amount : {userStakeInfoMap.get(poolType).userStakeTotalAmount}
                     </Flex>
                     <Flex>
-                      Start Num : {userStakeTicket.startNum}
-                    </Flex>
-                    <Flex>
-                      End Num : {userStakeTicket.endNum}
-                    </Flex>
-                    <Flex>
-                      Luck Rate : {userStakeTicket.luckRate} %
-                    </Flex>
-                    <Flex>
-                      Stake {userStakeTicket.coinName} Amount : {userStakeTicket.amount} {userStakeTicket.coinName}
+                      Luck Rate : {userStakeInfoMap.get(poolType).luckRate} %
                     </Flex>
                     <Flex>
                       <Dialog.Root>
@@ -445,21 +436,20 @@ export function Pool() {
                           <Dialog.Content className="DialogContent">
                             <Dialog.Title className="DialogTitle">Withdraw</Dialog.Title>
                             <Dialog.Description className="DialogDescription">
-                              Withdraw {userStakeTicket.coinName} coins
+                              Withdraw {userStakeInfoMap.get(poolType).coinName} coins
                             </Dialog.Description>
                             <fieldset className="Fieldset">
                               <label className="Label">
-                                Withdraw Amount ({userStakeTicket.coinName})
+                                Withdraw Amount ({userStakeInfoMap.get(poolType).coinName})
                               </label>
                               <input className="Input" type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(Number(e.target.value))} />
                             </fieldset>
 
                             <div style={{ display: 'flex', marginTop: 25, justifyContent: 'flex-end' }}>
                               <Dialog.Close asChild>
-                                <Button className="Button violet" onClick={() => packWithdrawTxb(
-                                  userStakeTicket.poolType,
-                                  userStakeTicket.id,
-                                  userStakeTicket.amount,
+                                <Button className="Button violet" onClick={() => packWithdrawTxbV2(
+                                  account.address,
+                                  poolType,
                                   withdrawAmount
                                 ).then((txb) => {
                                   if (txb) {
@@ -501,42 +491,43 @@ export function Pool() {
                     </Flex>
 
                     {
-                      userStakeTicket.winnerInfoList.length > 0
+                      userStakeInfoMap.get(poolType)?.winnerInfoList?.length > 0
                         ?
-                        <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
-                          <h3>Bingo !!!</h3>
-                          <Button className="Button violet" onClick={() => packClaimRewardTxb(
-                            userStakeTicket.poolType,
-                            userStakeTicket.id,
-                            userStakeTicket.winnerInfoList
-                          ).then((txb) => {
-                            if (txb) {
-                              signAndExecuteTransactionBlock(
-                                {
-                                  transactionBlock: txb,
-                                  options: {
-                                    showBalanceChanges: true,
-                                    showObjectChanges: true,
-                                    showEvents: true,
-                                    showEffects: true,
-                                    showInput: true,
-                                    showRawInput: true
-                                  }
-                                },
-                                {
-                                  onSuccess: (successResult) => {
-                                    console.log('executed transaction block success', successResult);
+                        userStakeInfoMap.get(poolType)?.winnerInfoList?.map((winnerInfo: any, index: any) => {
+                          <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
+                            <h3>Bingo !!!</h3>
+                            <Button className="Button violet" onClick={() => packClaimRewardTxbV2(
+                              poolType,
+                              winnerInfo
+                            ).then((txb) => {
+                              if (txb) {
+                                signAndExecuteTransactionBlock(
+                                  {
+                                    transactionBlock: txb,
+                                    options: {
+                                      showBalanceChanges: true,
+                                      showObjectChanges: true,
+                                      showEvents: true,
+                                      showEffects: true,
+                                      showInput: true,
+                                      showRawInput: true
+                                    }
                                   },
-                                  onError: (errorResult) => {
-                                    console.error('executed transaction block error', errorResult);
+                                  {
+                                    onSuccess: (successResult) => {
+                                      console.log('executed transaction block success', successResult);
+                                    },
+                                    onError: (errorResult) => {
+                                      console.error('executed transaction block error', errorResult);
+                                    },
                                   },
-                                },
-                              );
-                            }
-                          })}>
-                            Claim Reward
-                          </Button>
-                        </div>
+                                );
+                              }
+                            })}>
+                              Claim Reward
+                            </Button>
+                          </div>
+                        })
                         :
                         <></>
                     }

@@ -219,7 +219,7 @@ export async function packNewNumberPoolTxb(
   return txb;
 }
 
-// 取得 pool 資訊
+// 取得 pool 及 用戶 資訊
 export async function getPoolAndUserInfo(userAddress: any) {
 
   let poolInfo: any = new Object();
@@ -391,23 +391,6 @@ export async function getPoolAndUserInfo(userAddress: any) {
   return poolInfo;
 }
 
-// 取得 供應 資訊
-async function getShareSupply(shareSupplyId: string, decimal: number) {
-  let objectResponse = await suiClient.getObject({
-    id: shareSupplyId,
-    options: {
-      showContent: true
-    }
-  });
-  let obj: any = new Object();
-  if (objectResponse.data?.content) {
-    let data: any = objectResponse.data.content;
-    obj.totalSupply = data.fields.total_supply / decimal;
-    obj.activeSupply = data.fields.active_supply / decimal;
-  }
-  return obj;
-}
-
 // 取得 用戶質押票券資訊 列表
 async function getUserStakeTicketList(
   address: string,
@@ -482,6 +465,269 @@ async function getUserStakeTicketList(
   }
 
   return userStakeTicketList;
+}
+
+// 取得 pool 及 用戶 資訊 V2
+export async function getPoolAndUserInfoV2(userAddress: any) {
+
+  let poolInfo: any = new Object();
+
+  let poolList: Object[] = new Array<Object>();
+  poolInfo.poolList = poolList;
+
+  // 存放可以領獎的得獎者 陣列 
+  // {poolId, round, luckNum}
+  let canClaimRoundWinnerList: any[] = [];
+  let statisticsMap: Map<any, any> = new Map();
+
+  if (poolAddressConfigMap.size > 0) {
+
+    for (let poolConfig of poolAddressConfigMap.values()) {
+
+      if (poolConfig.pool === "") {
+        continue;
+      }
+
+      let poolObjectResp = await suiClient.getObject({
+        id: poolConfig.pool,
+        options: {
+          showContent: true
+        }
+      });
+      if (poolObjectResp.data?.content) {
+
+        let poolObject: any = new Object();
+
+        let poolData: any = poolObjectResp.data.content;
+
+        console.log(poolData);
+
+        poolObject.poolId = poolData.fields.id.id;
+        poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
+        poolObject.coinName = poolTypeCommonTypeMap.get(poolObject.poolType).coinName;
+        poolObject.currentRound = poolData.fields.current_round;
+
+        let decimal = poolTypeCommonTypeMap.get(poolObject.poolType)?.decimal;
+
+        // 質押數量
+        let statistics: any = new Object();
+        statistics.totalStakeAmount = poolData.fields.statistics.fields.total_amount / decimal;
+        statistics.userStakeArray = poolData.fields.statistics.fields.user_set.fields.contents;
+        statistics.userStakeAmountMap = await getTableData(poolData.fields.statistics.fields.user_amount_table.fields.id.id);
+        if (statistics.userStakeAmountMap) {
+          let userStakeAmountMap = new Map();
+          for (let [key, value] of statistics.userStakeAmountMap) {
+            userStakeAmountMap.set(key, value / decimal);
+          }
+          statistics.userStakeAmountMap = userStakeAmountMap;
+        }
+        poolObject.statistics = statistics;
+        statisticsMap.set(poolObject.poolType, statistics);
+
+        // 獎勵分配設定
+        let rewardAllocate: any = new Object();
+        rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio) / 100).toFixed(2);
+        rewardAllocate.allocateUserAmount = poolData.fields.reward_allocate.fields.allocate_user_amount
+        rewardAllocate.platformRatio = (parseFloat(poolData.fields.reward_allocate.fields.platform_ratio) / 100).toFixed(2);
+        rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio) / 100).toFixed(2);
+        poolObject.rewardAllocate = rewardAllocate;
+
+        // 時間設定
+        let timeInfo: any = new Object();
+        timeInfo.rewardDuration = poolData.fields.time_info.fields.reward_duration;
+        timeInfo.startTime = poolData.fields.time_info.fields.start_time;
+
+        let startDate = new Date();
+        startDate.setTime(timeInfo.startTime);
+        timeInfo.startTimeFormat = startDate.toLocaleString();
+
+        let rewardDate = new Date();
+        rewardDate.setTime(Number(timeInfo.startTime) + Number(timeInfo.rewardDuration));
+        timeInfo.rewardTimeFormat = rewardDate.toLocaleString();
+
+        poolObject.canAllocateReward = new Date().getTime() > rewardDate.getTime();
+        poolObject.canStake = new Date().getTime() > startDate.getTime();
+        poolObject.needNewNumberPool = poolConfig.numberPool === "";
+
+        poolObject.timeInfo = timeInfo;
+        if (poolConfig.shareSupply !== "") {
+          poolObject.shareSupplyInfo = await getShareSupply(poolConfig.shareSupply, decimal);
+        }
+
+        // 已領取獎勵的Map<round, address>
+        let claimedMap = await getTableData(poolData.fields.claimed.fields.id.id);
+        poolObject.claimedMap = claimedMap;
+
+        let claimRoundWinnerList: any = [];
+        poolObject.claimRoundWinnerList = claimRoundWinnerList;
+
+        let dynamicFieldsResp = await suiClient.getDynamicFields({
+          parentId: poolConfig.pool,
+        });
+
+        if (dynamicFieldsResp.data) {
+          let array = dynamicFieldsResp.data;
+          let expireTimeMap: any = new Map();
+          for (let dynamicFields of array) {
+            if (dynamicFields.objectType === "u64") {
+              // 得獎 round - 幸運號碼
+              let winnerObjResp = await suiClient.getObject({
+                id: dynamicFields.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (winnerObjResp.data?.content) {
+                let dataContent: any = winnerObjResp.data.content;
+                let round = dataContent.fields.name;
+                claimRoundWinnerList.push(
+                  {
+                    poolId: poolObject.poolId,
+                    poolType: poolObject.poolType,
+                    round: round,
+                    luckNum: dataContent.fields.value
+                  }
+                );
+              }
+            } else if (dynamicFields.name.type === `${PACKAGE_ID}::pool::ClaimExpiredTime`) {
+              // 取得到期時間
+              let expireDynamicFieldsResp = await suiClient.getDynamicFields({
+                parentId: dynamicFields.objectId,
+              });
+              if (expireDynamicFieldsResp.data) {
+                let expireDynamicFieldDataArray = expireDynamicFieldsResp.data;
+                for (let expireDynamicFieldData of expireDynamicFieldDataArray) {
+                  let expireData = await suiClient.getObject({
+                    id: expireDynamicFieldData.objectId,
+                    options: {
+                      showContent: true
+                    }
+                  });
+                  if (expireData.data?.content) {
+                    let expireDataContent: any = expireData.data.content;
+                    expireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
+                  }
+                }
+              }
+            }
+          }
+          // 檢查是否過期
+          let nowTime = new Date();
+          for (let claimRoundWinner of claimRoundWinnerList) {
+            if (claimedMap && claimedMap.has(claimRoundWinner.round)) {
+              continue;
+            }
+            let expireTime = expireTimeMap.get(claimRoundWinner.round);
+            if (expireTime) {
+              if (nowTime > new Date(Number(expireTime))) {
+                console.error(`round ${claimRoundWinner.round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+                continue;
+              }
+              claimRoundWinner.expireTime = expireTime;
+            }
+            canClaimRoundWinnerList.push(claimRoundWinner);
+          }
+
+        }
+
+        poolList.push(poolObject);
+      }
+    }
+
+    console.log(statisticsMap);
+    poolInfo.userStakeInfoMap = await getUserInfoMapV2(userAddress, canClaimRoundWinnerList, statisticsMap);
+  }
+
+  return poolInfo;
+}
+
+// 取得 供應 資訊
+async function getShareSupply(shareSupplyId: string, decimal: number) {
+  let objectResponse = await suiClient.getObject({
+    id: shareSupplyId,
+    options: {
+      showContent: true
+    }
+  });
+  let obj: any = new Object();
+  if (objectResponse.data?.content) {
+    let data: any = objectResponse.data.content;
+    obj.totalSupply = data.fields.total_supply / decimal;
+    obj.activeSupply = data.fields.active_supply / decimal;
+  }
+  return obj;
+}
+
+// 取得 用戶資訊 Map V2
+async function getUserInfoMapV2(
+  address: string,
+  canClaimRoundWinnerList: any[],
+  statisticsMap: Map<any, any>
+) {
+
+  let userStakeInfoMap: Map<any, any> = new Map();
+
+  Array.from(poolTypeCommonTypeMap.keys()).map((poolType: any) => {
+
+    let statistics = statisticsMap.get(poolType);
+
+    if (statistics) {
+      let totalStakeAmount = statistics.totalStakeAmount;
+
+      let userStakeTotalAmount: number =
+        statistics.userStakeAmountMap.has(address)
+          ? statistics.userStakeAmountMap.get(address)
+          : 0;
+
+      let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
+
+      userStakeInfoMap.set(poolType, {
+        userStakeTotalAmount: userStakeTotalAmount,
+        luckRate: luckRate,
+        coinName: poolTypeCommonTypeMap.get(poolType).coinName,
+        winnerInfoList: []
+      });
+    }
+  });
+
+  if (address) {
+    let objectResponse: any = await suiClient.getOwnedObjects({
+      owner: address,
+      options: {
+        showContent: true
+      },
+      filter: {
+        MatchAny: filters
+      }
+    });
+
+    if (objectResponse.data) {
+      for (let resp of objectResponse.data) {
+
+        let stakeShareId = resp.data.content.fields.id.id;
+        let startNum = resp.data.content.fields.start_num;
+        let endNum = resp.data.content.fields.end_num;
+        let poolType = resp.data.content.type.split(",")[0].split("::")[4];
+
+        for (let winnerInfo of canClaimRoundWinnerList) {
+          if (winnerInfo.poolType !== poolType){
+            continue;
+          }
+          let luckNum = winnerInfo.luckNum;
+          console.log("startNum " + startNum);
+          console.log("endNum " + endNum);
+          console.log("luckNum " + luckNum);
+          if (Number(luckNum) >= Number(startNum) && Number(luckNum) <= Number(endNum)) {
+            winnerInfo.stakeShareId = stakeShareId;
+            console.log("bingo!! " + stakeShareId);
+            userStakeInfoMap.get(poolType).winnerInfoList.push(winnerInfo);
+          }
+        }
+      }
+    }
+  }
+
+  return userStakeInfoMap;
 }
 
 // 取得 Table 內的資料
@@ -756,6 +1002,249 @@ export async function packWithdrawTxb(
   return txb;
 }
 
+// 建構 withdraw 的交易區塊 V2
+export async function packWithdrawTxbV2(
+  address: string,
+  poolType: string,
+  withdrawAmount: number
+) {
+
+  if (address) {
+
+    let txb: TransactionBlock = new TransactionBlock();
+
+    let poolConfig = poolTypeConfigMap.get(poolType);
+    let poolCommonType = poolTypeCommonTypeMap.get(poolType);
+    let totalAmount: number = 0;
+    let needBreak: boolean = false;
+
+    let objectResponse: any = await suiClient.getOwnedObjects({
+      owner: address,
+      options: {
+        showContent: true
+      },
+      filter: {
+        MatchAny: filters
+      }
+    });
+
+    if (objectResponse.data) {
+      for (let resp of objectResponse.data) {
+
+        let args: TransactionArgument[] = [];
+        let splitArgs: TransactionArgument[]
+        let typeArgs: any[];
+        let splitTypeArgs: any[];
+    
+        let [newShare]: any[] = [];
+
+        let stakePoolShareId = resp.data.content.fields.id.id;
+        let ticketPoolType = resp.data.content.type.split(",")[0].split("::")[4];
+
+        if (poolType !== ticketPoolType) {
+          continue;
+        }
+
+        let decimal = poolCommonType.decimal;
+
+        let dynamicDataResp = await suiClient.getDynamicFields({
+          parentId: stakePoolShareId
+        });
+
+        if (dynamicDataResp.data) {
+          for (let dynamicData of dynamicDataResp.data) {
+            if (dynamicData.objectType === "u64") {
+              let dynamicObjectMap = await getTableRawData(
+                stakePoolShareId,
+                dynamicData.name.type,
+                dynamicData.name.value
+              );
+              console.log(dynamicObjectMap);
+              let startNum = resp.data.content.fields.start_num;
+              let endNum = resp.data.content.fields.end_num;
+              let stakeAmount = dynamicObjectMap.get(stakePoolShareId);
+              let realAmount = stakeAmount / decimal;
+              totalAmount = Number(totalAmount) + Number(realAmount);
+
+              console.log(startNum);
+              console.log(endNum);
+
+              let rangeNum = endNum - startNum + 1
+              let numRate = rangeNum / stakeAmount;
+
+              if (withdrawAmount < totalAmount) {
+                let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
+                // 切割 share
+                splitArgs = [
+                  txb.object(stakePoolShareId),
+                  txb.pure(parseInt((shareAmount * numRate * decimal).toString()))
+                ];
+
+                splitTypeArgs = [
+                  `${PACKAGE_ID}::pool::${poolType}`,
+                  poolCommonType.nativeType,
+                  poolCommonType.rewardType
+                ]
+
+                newShare = txb.moveCall({
+                  target: `${PACKAGE_ID}::${MODULE_STAKED_SHARE}::${FUN_SPLIT_SHARE}`,
+                  arguments: splitArgs,
+                  typeArguments: splitTypeArgs
+                });
+
+                switch (poolType) {
+                  case PoolTypeEnum.VALIDATOR:
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      newShare,
+                      txb.object(SUI_SYSTEM_STATE_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args
+                    });
+
+                    break;
+                  case PoolTypeEnum.BUCKET_PROTOCOL:
+
+                    typeArgs = [
+                      BUCK_COIN_TYPE,
+                      SUI_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      txb.object(SUI_CLOCK_ID),
+                      txb.object(BUCKET_FLASK),
+                      txb.object(BUCKET_FOUTAIN),
+                      newShare,
+                      txb.pure.u64(BUCKET_LOCK_TIME)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+
+                    break;
+                  case PoolTypeEnum.SCALLOP_PROTOCOL:
+
+                    typeArgs = [
+                      SCA_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      newShare,
+                      txb.object(SCALLOP_VERSION),
+                      txb.object(SCALLOP_MARKET),
+                      txb.object(SUI_CLOCK_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+
+                    needBreak = true;
+
+                    break;
+                }
+                break;
+              } else {
+                switch (poolType) {
+                  case PoolTypeEnum.VALIDATOR:
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      txb.object(stakePoolShareId),
+                      txb.object(SUI_SYSTEM_STATE_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args
+                    });
+
+                    break;
+                  case PoolTypeEnum.BUCKET_PROTOCOL:
+
+                    typeArgs = [
+                      BUCK_COIN_TYPE,
+                      SUI_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      txb.object(SUI_CLOCK_ID),
+                      txb.object(BUCKET_FLASK),
+                      txb.object(BUCKET_FOUTAIN),
+                      txb.object(stakePoolShareId),
+                      txb.pure.u64(BUCKET_LOCK_TIME)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+
+                    break;
+                  case PoolTypeEnum.SCALLOP_PROTOCOL:
+
+                    typeArgs = [
+                      SCA_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      txb.object(stakePoolShareId),
+                      txb.object(SCALLOP_VERSION),
+                      txb.object(SCALLOP_MARKET),
+                      txb.object(SUI_CLOCK_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+                    break;
+                }
+              }
+            }
+          }
+        }
+
+        if (needBreak) {
+          break;
+        }
+        console.log(args);
+      }
+    }
+
+    return txb;
+  }
+
+  return null;
+}
+
 // 建構 分配獎勵 的交易區塊
 export async function packAllocateRewardsTxb(
   poolId: string
@@ -921,6 +1410,80 @@ export async function packClaimRewardTxb(
 
         break;
     }
+  }
+
+  return txb;
+}
+
+// 建構 領取獎勵 的交易區塊 V2
+export async function packClaimRewardTxbV2(
+  poolType: string,
+  winnerInfo: any
+) {
+
+  let txb: TransactionBlock = new TransactionBlock();
+
+  let args: TransactionArgument[];
+  let typeArgs: any[];
+  let stakedShareId = winnerInfo.stakeShareId;
+
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
+
+      args = [
+        txb.object(winnerInfo.poolId),
+        txb.pure(winnerInfo.round),
+        txb.makeMoveVec({ objects: [stakedShareId] }),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
+        arguments: args
+      });
+
+      break;
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+
+      typeArgs = [
+        BUCK_COIN_TYPE,
+        SUI_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(winnerInfo.poolId),
+        txb.pure(winnerInfo.round),
+        txb.makeMoveVec({ objects: [stakedShareId] }),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_BUCKET_ADAPTER}::${FUN_CLAIM_REWARD}`,
+        arguments: args,
+        typeArguments: typeArgs
+      });
+
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+
+      typeArgs = [
+        BUCK_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(winnerInfo.poolId),
+        txb.pure(winnerInfo.round),
+        txb.makeMoveVec({ objects: [stakedShareId] }),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_CLAIM_REWARD}`,
+        arguments: args,
+        typeArguments: typeArgs
+      });
+
+      break;
   }
 
   return txb;
