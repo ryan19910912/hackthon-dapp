@@ -4,7 +4,8 @@ import {
   getPoolTypeList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
-  getPoolAndUserInfoV2,
+  getPoolInfoListV3,
+  getUserStakeInfoV3,
   packStakeTxb,
   packWithdrawTxbV2,
   packAllocateRewardsTxb,
@@ -35,13 +36,25 @@ export function Pool() {
   const [stakeAmount, setStakeAmount] = useState(0);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
   const [poolTypeList, setPoolTypeList] = useState([]);
+  const [canClaimRoundWinnerMap, setCanClaimRoundWinnerMap] = useState(new Map<any, any>);
+  const [statisticsMap, setStatisticsMap] = useState(new Map<any, any>);
 
   useEffect(() => {
     if (account) {
-      getPoolAndUserInfoV2(account.address).then((poolInfo: any) => {
+      getPoolInfoListV3(null).then((poolInfo: any) => {
         console.log(poolInfo);
         setPoolList(poolInfo.poolList);
-        setUserStakeInfoMap(poolInfo.userStakeInfoMap);
+        setCanClaimRoundWinnerMap(poolInfo.canClaimRoundWinnerMap);
+        setStatisticsMap(poolInfo.statisticsMap);
+        getUserStakeInfoV3(
+          account.address, 
+          null, 
+          poolInfo.canClaimRoundWinnerMap, 
+          poolInfo.statisticsMap
+        ).then((userStakeInfo: any) => {
+          console.log(userStakeInfo);
+          setUserStakeInfoMap(userStakeInfo.userStakeInfoMap);
+        });
       });
       let poolTypeList: any = getPoolTypeList();
       setDefaultPoolType(poolTypeList[0])
@@ -261,11 +274,26 @@ export function Pool() {
                   <Flex>
                     Total Supply : {pool.shareSupplyInfo?.totalSupply} {pool.coinName}
                   </Flex>
+                  {
+                    pool.validatorStatus ?
+                      <div>
+                        <Flex>
+                          Available : {pool.validatorStatus.available}
+                        </Flex>
+                        <Flex>
+                          LastEpoch : {pool.validatorStatus.lastEpoch}
+                        </Flex>
+                        <Flex>
+                          Pending : {pool.validatorStatus.pending}
+                        </Flex>
+                      </div>
+                      :
+                      <></>
+                  }
 
                   {
                     pool.needNewNumberPool ?
                       <Button className="Button violet" onClick={() => packNewNumberPoolTxb(
-                        pool.poolId,
                         pool.poolType
                       ).then((txb) => {
                         if (txb) {

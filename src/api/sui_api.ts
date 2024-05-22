@@ -1,5 +1,5 @@
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
-import { SuiClient, CoinBalance, SuiObjectDataFilter } from '@mysten/sui.js/client';
+import { SuiClient, SuiObjectDataFilter } from '@mysten/sui.js/client';
 import {
   fetchBeaconByTime,
   HttpChainClient,
@@ -86,7 +86,8 @@ const BUCK_COIN_DECIMAL = 1_000_000_000;
 const SCA_COIN_DECIMAL = 1_000_000_000;
 
 const poolTypeCommonTypeMap: any = new Map();
-let filters: SuiObjectDataFilter[] = [];
+let filterMap: Map<any, any> = new Map();
+let filters: any[] = [];
 Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
   let nativeType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
   let rewardType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
@@ -115,6 +116,7 @@ Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
   let filter: SuiObjectDataFilter = {
     StructType: structType
   }
+  filterMap.set(poolType, filter);
   filters.push(filter);
   poolTypeCommonTypeMap.set(poolType, {
     nativeType: nativeType,
@@ -192,7 +194,6 @@ export async function packNewPoolTxb(
 
 // 構建 Number pool 交易區塊
 export async function packNewNumberPoolTxb(
-  poolId: string,
   poolType: string
 ) {
   let txb: TransactionBlock = new TransactionBlock();
@@ -202,12 +203,12 @@ export async function packNewNumberPoolTxb(
 
   let typeArgs = [
     `${PACKAGE_ID}::${MODULE_POOL}::${poolType}`,
-    nativeType, rewardType
+    nativeType,
+    rewardType
   ];
 
   let newPoolArgs: TransactionArgument[] = [
-    txb.object(ADMIN_CAP_ID),
-    txb.object(poolId)
+    txb.object(ADMIN_CAP_ID)
   ];
 
   txb.moveCall({
@@ -251,8 +252,6 @@ export async function getPoolAndUserInfo(userAddress: any) {
         let poolObject: any = new Object();
 
         let poolData: any = poolObjectResp.data.content;
-
-        console.log(poolData);
 
         poolObject.poolId = poolData.fields.id.id;
         poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
@@ -356,7 +355,6 @@ export async function getPoolAndUserInfo(userAddress: any) {
                   });
                   if (expireData.data?.content) {
                     let expireDataContent: any = expireData.data.content;
-                    console.log(expireDataContent.fields.name, expireDataContent.fields.value);
                     expireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
                   }
                 }
@@ -500,8 +498,6 @@ export async function getPoolAndUserInfoV2(userAddress: any) {
 
         let poolData: any = poolObjectResp.data.content;
 
-        console.log(poolData);
-
         poolObject.poolId = poolData.fields.id.id;
         poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
         poolObject.coinName = poolTypeCommonTypeMap.get(poolObject.poolType).coinName;
@@ -609,6 +605,21 @@ export async function getPoolAndUserInfoV2(userAddress: any) {
                   }
                 }
               }
+            } else if (dynamicFields.objectType === `${PACKAGE_ID}::validator_adapter::StakedSuiStatus`) {
+              let objResp = await suiClient.getObject({
+                id: dynamicFields.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (objResp.data?.content) {
+                let dataContent: any = objResp.data.content;
+                let validatorStatus: any = new Object();
+                validatorStatus.available = dataContent.fields.value.fields.available;
+                validatorStatus.lastEpoch = dataContent.fields.value.fields.last_epoch;
+                validatorStatus.pending = dataContent.fields.value.fields.pending;
+                poolObject.validatorStatus = validatorStatus;
+              }
             }
           }
           // 檢查是否過期
@@ -620,7 +631,7 @@ export async function getPoolAndUserInfoV2(userAddress: any) {
             let expireTime = expireTimeMap.get(claimRoundWinner.round);
             if (expireTime) {
               if (nowTime > new Date(Number(expireTime))) {
-                console.error(`round ${claimRoundWinner.round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+                // console.error(`round ${claimRoundWinner.round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
                 continue;
               }
               claimRoundWinner.expireTime = expireTime;
@@ -633,11 +644,198 @@ export async function getPoolAndUserInfoV2(userAddress: any) {
         poolList.push(poolObject);
       }
     }
-
-    console.log(statisticsMap);
     poolInfo.userStakeInfoMap = await getUserInfoMapV2(userAddress, canClaimRoundWinnerList, statisticsMap);
   }
 
+  return poolInfo;
+}
+
+// 取得 pool 資訊 V3
+export async function getPoolInfoListV3(_poolType: any) {
+
+  let poolInfo: any = new Object();
+
+  let poolList: Object[] = new Array<Object>();
+  poolInfo.poolList = poolList;
+
+  // 存放可以領獎的得獎者 Map
+  // {poolId, round, luckNum}
+  let canClaimRoundWinnerMap: Map<any, any> = new Map();
+  poolInfo.canClaimRoundWinnerMap = canClaimRoundWinnerMap;
+  let statisticsMap: Map<any, any> = new Map();
+  poolInfo.statisticsMap = statisticsMap;
+
+  if (poolAddressConfigMap.size > 0) {
+
+    for (let poolConfig of poolAddressConfigMap.values()) {
+
+      if (poolConfig.pool === "") {
+        continue;
+      }
+      if (_poolType && poolConfig.poolType !== _poolType) {
+        continue;
+      }
+
+      let poolObjectResp = await suiClient.getObject({
+        id: poolConfig.pool,
+        options: {
+          showContent: true
+        }
+      });
+      if (poolObjectResp.data?.content) {
+
+        let poolObject: any = new Object();
+
+        let poolData: any = poolObjectResp.data.content;
+
+        poolObject.poolId = poolData.fields.id.id;
+        poolObject.poolType = poolAddressConfigMap.get(poolObject.poolId).poolType;
+        poolObject.coinName = poolTypeCommonTypeMap.get(poolObject.poolType).coinName;
+        poolObject.currentRound = poolData.fields.current_round;
+
+        let decimal = poolTypeCommonTypeMap.get(poolObject.poolType)?.decimal;
+
+        // 質押數量
+        let statistics: any = new Object();
+        statistics.totalStakeAmount = poolData.fields.statistics.fields.total_amount / decimal;
+        statistics.userStakeArray = poolData.fields.statistics.fields.user_set.fields.contents;
+        statistics.userStakeAmountMap = await getTableData(poolData.fields.statistics.fields.user_amount_table.fields.id.id);
+        if (statistics.userStakeAmountMap) {
+          let userStakeAmountMap = new Map();
+          for (let [key, value] of statistics.userStakeAmountMap) {
+            userStakeAmountMap.set(key, value / decimal);
+          }
+          statistics.userStakeAmountMap = userStakeAmountMap;
+        }
+        // poolObject.statistics = statistics;
+        statisticsMap.set(poolObject.poolType, statistics);
+
+        // 獎勵分配設定
+        let rewardAllocate: any = new Object();
+        rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio) / 100).toFixed(2);
+        rewardAllocate.allocateUserAmount = poolData.fields.reward_allocate.fields.allocate_user_amount
+        rewardAllocate.platformRatio = (parseFloat(poolData.fields.reward_allocate.fields.platform_ratio) / 100).toFixed(2);
+        rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio) / 100).toFixed(2);
+        poolObject.rewardAllocate = rewardAllocate;
+
+        // 時間設定
+        let timeInfo: any = new Object();
+        timeInfo.rewardDuration = poolData.fields.time_info.fields.reward_duration;
+        timeInfo.startTime = poolData.fields.time_info.fields.start_time;
+
+        let startDate = new Date();
+        startDate.setTime(timeInfo.startTime);
+        timeInfo.startTimeFormat = startDate.toLocaleString();
+
+        let rewardDate = new Date();
+        rewardDate.setTime(Number(timeInfo.startTime) + Number(timeInfo.rewardDuration));
+        timeInfo.rewardTimeFormat = rewardDate.toLocaleString();
+
+        poolObject.canAllocateReward = new Date().getTime() > rewardDate.getTime();
+        poolObject.canStake = new Date().getTime() > startDate.getTime();
+        poolObject.needNewNumberPool = poolConfig.numberPool === "";
+
+        poolObject.timeInfo = timeInfo;
+        if (poolConfig.shareSupply !== "") {
+          poolObject.shareSupplyInfo = await getShareSupply(poolConfig.shareSupply, decimal);
+        }
+
+        // 已領取獎勵的Map<round, address>
+        let claimedMap = await getTableData(poolData.fields.claimed.fields.id.id);
+        poolObject.claimedMap = claimedMap;
+
+        let claimRoundWinnerList: any = [];
+        poolObject.claimRoundWinnerList = claimRoundWinnerList;
+
+        let dynamicFieldsResp = await suiClient.getDynamicFields({
+          parentId: poolConfig.pool,
+        });
+
+        if (dynamicFieldsResp.data) {
+          let array = dynamicFieldsResp.data;
+          let expireTimeMap: any = new Map();
+          for (let dynamicFields of array) {
+            if (dynamicFields.objectType === "u64") {
+              // 得獎 round - 幸運號碼
+              let winnerObjResp = await suiClient.getObject({
+                id: dynamicFields.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (winnerObjResp.data?.content) {
+                let dataContent: any = winnerObjResp.data.content;
+                let round = dataContent.fields.name;
+                claimRoundWinnerList.push(
+                  {
+                    poolId: poolObject.poolId,
+                    poolType: poolObject.poolType,
+                    round: round,
+                    luckNum: dataContent.fields.value
+                  }
+                );
+              }
+            } else if (dynamicFields.name.type === `${PACKAGE_ID}::pool::ClaimExpiredTime`) {
+              // 取得到期時間
+              let expireDynamicFieldsResp = await suiClient.getDynamicFields({
+                parentId: dynamicFields.objectId,
+              });
+              if (expireDynamicFieldsResp.data) {
+                let expireDynamicFieldDataArray = expireDynamicFieldsResp.data;
+                for (let expireDynamicFieldData of expireDynamicFieldDataArray) {
+                  let expireData = await suiClient.getObject({
+                    id: expireDynamicFieldData.objectId,
+                    options: {
+                      showContent: true
+                    }
+                  });
+                  if (expireData.data?.content) {
+                    let expireDataContent: any = expireData.data.content;
+                    expireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
+                  }
+                }
+              }
+            } else if (dynamicFields.objectType === `${PACKAGE_ID}::validator_adapter::StakedSuiStatus`) {
+              let objResp = await suiClient.getObject({
+                id: dynamicFields.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (objResp.data?.content) {
+                let dataContent: any = objResp.data.content;
+                let validatorStatus: any = new Object();
+                validatorStatus.available = dataContent.fields.value.fields.available;
+                validatorStatus.lastEpoch = dataContent.fields.value.fields.last_epoch;
+                validatorStatus.pending = dataContent.fields.value.fields.pending;
+                poolObject.validatorStatus = validatorStatus;
+              }
+            }
+          }
+          // 檢查是否過期
+          let nowTime = new Date();
+          let canClaimRoundWinnerList = [];
+          for (let claimRoundWinner of claimRoundWinnerList) {
+            if (claimedMap && claimedMap.has(claimRoundWinner.round)) {
+              continue;
+            }
+            let expireTime = expireTimeMap.get(claimRoundWinner.round);
+            if (expireTime) {
+              if (nowTime > new Date(Number(expireTime))) {
+                // console.error(`round ${claimRoundWinner.round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+                continue;
+              }
+              claimRoundWinner.expireTime = expireTime;
+            }
+            canClaimRoundWinnerList.push(claimRoundWinner);
+          }
+          canClaimRoundWinnerMap.set(poolObject.poolType, canClaimRoundWinnerList);
+        }
+
+        poolList.push(poolObject);
+      }
+    }
+  }
   return poolInfo;
 }
 
@@ -710,16 +908,12 @@ async function getUserInfoMapV2(
         let poolType = resp.data.content.type.split(",")[0].split("::")[4];
 
         for (let winnerInfo of canClaimRoundWinnerList) {
-          if (winnerInfo.poolType !== poolType){
+          if (winnerInfo.poolType !== poolType) {
             continue;
           }
           let luckNum = winnerInfo.luckNum;
-          console.log("startNum " + startNum);
-          console.log("endNum " + endNum);
-          console.log("luckNum " + luckNum);
           if (Number(luckNum) >= Number(startNum) && Number(luckNum) <= Number(endNum)) {
             winnerInfo.stakeShareId = stakeShareId;
-            console.log("bingo!! " + stakeShareId);
             userStakeInfoMap.get(poolType).winnerInfoList.push(winnerInfo);
           }
         }
@@ -728,6 +922,87 @@ async function getUserInfoMapV2(
   }
 
   return userStakeInfoMap;
+}
+
+// 取得 用戶資訊 V3
+export async function getUserStakeInfoV3(
+  address: string,
+  _poolType: any,
+  canClaimRoundWinnerMap: Map<any, any>,
+  statisticsMap: Map<any, any>
+) {
+
+  let userStakeInfo: any = new Object();
+
+  let userStakeInfoMap: Map<any, any> = new Map();
+  userStakeInfo.userStakeInfoMap = userStakeInfoMap;
+
+  let poolTypeCommonTypeList = poolTypeCommonTypeMap.keys();
+
+  for (let poolType of poolTypeCommonTypeList) {
+    if (_poolType && _poolType !== poolType) {
+      continue;
+    }
+
+    console.log(statisticsMap);
+
+    let statistics = statisticsMap.get(poolType);
+
+    if (statistics) {
+      let totalStakeAmount = statistics.totalStakeAmount;
+
+      let userStakeTotalAmount: number =
+        statistics.userStakeAmountMap.has(address)
+          ? statistics.userStakeAmountMap.get(address)
+          : 0;
+
+      let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
+
+      userStakeInfoMap.set(poolType, {
+        userStakeTotalAmount: userStakeTotalAmount,
+        luckRate: luckRate,
+        coinName: poolTypeCommonTypeMap.get(poolType).coinName,
+        winnerInfoList: []
+      });
+
+      if (address) {
+        let filterStract = filterMap.get(poolType);
+        let objectResponse: any = await suiClient.getOwnedObjects({
+          owner: address,
+          options: {
+            showContent: true
+          },
+          filter: {
+            MatchAny: [filterStract]
+          }
+        });
+
+        if (objectResponse.data) {
+          for (let resp of objectResponse.data) {
+
+            let stakeShareId = resp.data.content.fields.id.id;
+            let startNum = resp.data.content.fields.start_num;
+            let endNum = resp.data.content.fields.end_num;
+            let poolType = resp.data.content.type.split(",")[0].split("::")[4];
+
+            let canClaimRoundWinnerList = canClaimRoundWinnerMap.get(poolType);
+
+            for (let winnerInfo of canClaimRoundWinnerList) {
+              if (winnerInfo.poolType !== poolType) {
+                continue;
+              }
+              let luckNum = winnerInfo.luckNum;
+              if (Number(luckNum) >= Number(startNum) && Number(luckNum) <= Number(endNum)) {
+                winnerInfo.stakeShareId = stakeShareId;
+                userStakeInfoMap.get(poolType).winnerInfoList.push(winnerInfo);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return userStakeInfo;
 }
 
 // 取得 Table 內的資料
@@ -790,24 +1065,52 @@ export async function packStakeTxb(
   let decimal = poolTypeCommonTypeMap.get(poolType).decimal;
   let coinType = poolTypeCommonTypeMap.get(poolType).coinType;
   let coinObjectId: string = "";
+  let needSplit = false;
 
-  let walletCoinResp: any = await suiClient.getCoins({
+  let walletBalance: any = await suiClient.getBalance({
     owner: address,
     coinType: coinType
   });
 
   let stakeCoinAmount: number = Number((stakeAmount * decimal));
 
-  for (let coinInfo of walletCoinResp.data) {
-    if (coinInfo.balance > stakeCoinAmount) {
-      coinObjectId = coinInfo.coinObjectId;
-      break;
-    }
+  if (walletBalance.totalBalance < stakeCoinAmount) {
+    alert("Not Enough Balance.");
+    return null;
+  } else if (walletBalance.totalBalance > stakeCoinAmount) {
+    needSplit = true;
   }
 
-  if (coinObjectId === "") {
-    alert("Not Enough Balance.");
-  };
+  let walletCoinResp: any = await suiClient.getCoins({
+    owner: address,
+    coinType: coinType
+  });
+
+  let coinsArray = [];
+
+  let index = 0;
+
+  for (let coinInfo of walletCoinResp.data) {
+    if (index == 0) {
+      coinObjectId = coinInfo.coinObjectId;
+    } else {
+      coinsArray.push(coinInfo.coinObjectId);
+    }
+    index++;
+  }
+
+  if (coinsArray.length > 0) {
+    txb.mergeCoins(coinObjectId, coinsArray)
+  }
+
+  let [realCoin]: any = [];
+  if (needSplit) {
+    if (poolType === PoolTypeEnum.VALIDATOR) {
+      [realCoin] = txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]);
+    } else {
+      [realCoin] = txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]);
+    }
+  }
 
   switch (poolType) {
     case PoolTypeEnum.VALIDATOR:
@@ -820,7 +1123,7 @@ export async function packStakeTxb(
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
         txb.object(SUI_SYSTEM_STATE_ID),
-        txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]),
+        needSplit ? realCoin : txb.object(coinObjectId),
         txb.pure(validatorAddress),
         txb.object(SUI_CLOCK_ID)
       ];
@@ -844,7 +1147,7 @@ export async function packStakeTxb(
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
         txb.object(BUCKET_FLASK),
-        txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]),
+        needSplit ? realCoin : txb.object(coinObjectId),
         txb.object(BUCKET_FOUTAIN),
         txb.pure.u64(BUCKET_LOCK_TIME),
         txb.object(SUI_CLOCK_ID)
@@ -870,7 +1173,7 @@ export async function packStakeTxb(
         txb.object(poolId),
         txb.object(SCALLOP_VERSION),
         txb.object(SCALLOP_MARKET),
-        txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]),
+        needSplit ? realCoin : txb.object(coinObjectId),
         txb.object(SUI_CLOCK_ID)
       ];
 
@@ -1035,7 +1338,7 @@ export async function packWithdrawTxbV2(
         let splitArgs: TransactionArgument[]
         let typeArgs: any[];
         let splitTypeArgs: any[];
-    
+
         let [newShare]: any[] = [];
 
         let stakePoolShareId = resp.data.content.fields.id.id;
@@ -1059,15 +1362,11 @@ export async function packWithdrawTxbV2(
                 dynamicData.name.type,
                 dynamicData.name.value
               );
-              console.log(dynamicObjectMap);
               let startNum = resp.data.content.fields.start_num;
               let endNum = resp.data.content.fields.end_num;
               let stakeAmount = dynamicObjectMap.get(stakePoolShareId);
               let realAmount = stakeAmount / decimal;
               totalAmount = Number(totalAmount) + Number(realAmount);
-
-              console.log(startNum);
-              console.log(endNum);
 
               let rangeNum = endNum - startNum + 1
               let numRate = rangeNum / stakeAmount;
@@ -1235,7 +1534,6 @@ export async function packWithdrawTxbV2(
         if (needBreak) {
           break;
         }
-        console.log(args);
       }
     }
 
