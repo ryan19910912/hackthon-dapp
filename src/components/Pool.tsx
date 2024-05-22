@@ -491,42 +491,50 @@ export function Pool() {
                     </Flex>
 
                     {
-                      userStakeInfoMap.get(poolType)?.winnerInfoList?.length > 0
+                      userStakeInfoMap.get(poolType)?.winnerInfoList.length > 0
                         ?
                         userStakeInfoMap.get(poolType)?.winnerInfoList?.map((winnerInfo: any, index: any) => {
-                          <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
-                            <h3>Bingo !!!</h3>
-                            <Button className="Button violet" onClick={() => packClaimRewardTxbV2(
-                              poolType,
-                              winnerInfo
-                            ).then((txb) => {
-                              if (txb) {
-                                signAndExecuteTransactionBlock(
-                                  {
-                                    transactionBlock: txb,
-                                    options: {
-                                      showBalanceChanges: true,
-                                      showObjectChanges: true,
-                                      showEvents: true,
-                                      showEffects: true,
-                                      showInput: true,
-                                      showRawInput: true
-                                    }
-                                  },
-                                  {
-                                    onSuccess: (successResult) => {
-                                      console.log('executed transaction block success', successResult);
+                          return (
+                            <div key={index} style={{ border: '5px solid yellow', padding: 10 }}>
+                              <h3>Bingo !!!</h3>
+                              <Flex>
+                                #week : {winnerInfo.round}
+                              </Flex>
+                              <Flex>
+                                Expire Time : {winnerInfo.expireTime}
+                              </Flex>
+                              <Button className="Button violet" onClick={() => packClaimRewardTxbV2(
+                                poolType,
+                                winnerInfo
+                              ).then((txb) => {
+                                if (txb) {
+                                  signAndExecuteTransactionBlock(
+                                    {
+                                      transactionBlock: txb,
+                                      options: {
+                                        showBalanceChanges: true,
+                                        showObjectChanges: true,
+                                        showEvents: true,
+                                        showEffects: true,
+                                        showInput: true,
+                                        showRawInput: true
+                                      }
                                     },
-                                    onError: (errorResult) => {
-                                      console.error('executed transaction block error', errorResult);
+                                    {
+                                      onSuccess: (successResult) => {
+                                        console.log('executed transaction block success', successResult);
+                                      },
+                                      onError: (errorResult) => {
+                                        console.error('executed transaction block error', errorResult);
+                                      },
                                     },
-                                  },
-                                );
-                              }
-                            })}>
-                              Claim Reward
-                            </Button>
-                          </div>
+                                  );
+                                }
+                              })}>
+                                Claim Reward
+                              </Button>
+                            </div>
+                          )
                         })
                         :
                         <></>
