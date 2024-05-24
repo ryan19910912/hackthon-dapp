@@ -1,6 +1,7 @@
 import { ConnectButton } from "@mysten/dapp-kit";
 import { Box, Container, Flex, Heading } from "@radix-ui/themes";
 import { Pool } from "./components/Pool";
+import { Test } from "./components/FinalTest";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           style={{ background: "var(--gray-a2)", minHeight: 500 }}
         >
           <Pool />
+          <Test />
         </Container>
       </Container>
     </>

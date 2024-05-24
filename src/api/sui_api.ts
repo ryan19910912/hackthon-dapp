@@ -684,6 +684,8 @@ export async function getPoolInfoListV3(_poolType: any) {
       });
       if (poolObjectResp.data?.content) {
 
+        console.log(poolObjectResp);
+
         let poolObject: any = new Object();
 
         let poolData: any = poolObjectResp.data.content;
@@ -697,17 +699,19 @@ export async function getPoolInfoListV3(_poolType: any) {
 
         // 質押數量
         let statistics: any = new Object();
-        statistics.totalStakeAmount = poolData.fields.statistics.fields.total_amount / decimal;
-        statistics.userStakeArray = poolData.fields.statistics.fields.user_set.fields.contents;
-        statistics.userStakeAmountMap = await getTableData(poolData.fields.statistics.fields.user_amount_table.fields.id.id);
-        if (statistics.userStakeAmountMap) {
-          let userStakeAmountMap = new Map();
-          for (let [key, value] of statistics.userStakeAmountMap) {
-            userStakeAmountMap.set(key, value / decimal);
+        if (poolData.fields.statistics){
+          statistics.totalStakeAmount = poolData.fields.statistics.fields.total_amount / decimal;
+          statistics.userStakeArray = poolData.fields.statistics.fields.user_set.fields.contents;
+          statistics.userStakeAmountMap = await getTableData(poolData.fields.statistics.fields.user_amount_table.fields.id.id);
+          if (statistics.userStakeAmountMap) {
+            let userStakeAmountMap = new Map();
+            for (let [key, value] of statistics.userStakeAmountMap) {
+              userStakeAmountMap.set(key, value / decimal);
+            }
+            statistics.userStakeAmountMap = userStakeAmountMap;
           }
-          statistics.userStakeAmountMap = userStakeAmountMap;
         }
-        // poolObject.statistics = statistics;
+        poolObject.statistics = statistics;
         statisticsMap.set(poolObject.poolType, statistics);
 
         // 獎勵分配設定
@@ -743,6 +747,9 @@ export async function getPoolInfoListV3(_poolType: any) {
         // 已領取獎勵的Map<round, address>
         let claimedMap = await getTableData(poolData.fields.claimed.fields.id.id);
         poolObject.claimedMap = claimedMap;
+
+        let claimableMap = await getTableData(poolData.fields.claimable.fields.id.id);
+        console.log(claimableMap);
 
         let claimRoundWinnerList: any = [];
         poolObject.claimRoundWinnerList = claimRoundWinnerList;
@@ -869,7 +876,7 @@ async function getUserInfoMapV2(
 
     let statistics = statisticsMap.get(poolType);
 
-    if (statistics) {
+    if (statistics != null) {
       let totalStakeAmount = statistics.totalStakeAmount;
 
       let userStakeTotalAmount: number =
@@ -946,21 +953,21 @@ export async function getUserStakeInfoV3(
 
     console.log(statisticsMap);
 
-    let statistics = statisticsMap.get(poolType);
+    let statistics: any = statisticsMap.get(poolType);
 
-    if (statistics) {
-      let totalStakeAmount = statistics.totalStakeAmount;
+    if (statistics != null) {
+      // let totalStakeAmount = statistics.totalStakeAmount;
 
-      let userStakeTotalAmount: number =
-        statistics.userStakeAmountMap.has(address)
-          ? statistics.userStakeAmountMap.get(address)
-          : 0;
+      // let userStakeTotalAmount: number =
+      //   statistics.userStakeAmountMap.has(address)
+      //     ? statistics.userStakeAmountMap.get(address)
+      //     : 0;
 
-      let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
+      // let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
 
       userStakeInfoMap.set(poolType, {
-        userStakeTotalAmount: userStakeTotalAmount,
-        luckRate: luckRate,
+        // userStakeTotalAmount: userStakeTotalAmount,
+        // luckRate: luckRate,
         coinName: poolTypeCommonTypeMap.get(poolType).coinName,
         winnerInfoList: []
       });

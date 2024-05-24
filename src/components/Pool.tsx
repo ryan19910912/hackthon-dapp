@@ -9,7 +9,7 @@ import {
   packStakeTxb,
   packWithdrawTxbV2,
   packAllocateRewardsTxb,
-  packClaimRewardTxbV2
+  packClaimRewardTxbV2,
 } from "../api/sui_api";
 import { useState, useEffect } from 'react';
 
