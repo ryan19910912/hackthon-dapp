@@ -4,7 +4,9 @@ import {
   fetchBeaconByTime,
   HttpChainClient,
   HttpCachingChain,
-} from 'drand-client'
+} from 'drand-client';
+import { bcs } from "@mysten/sui.js/bcs";
+import { bls12_381 as bls } from "@noble/curves/bls12-381";
 
 enum PoolTypeEnum {
   VALIDATOR = "VALIDATOR",
@@ -326,7 +328,7 @@ export async function getPoolInfo(poolType: any) {
         // 上個 Round 的獎勵數量
         poolObject.lastRewardBalance = lastRewardBalance / rewardDecimal;
 
-        if (poolConfig.poolType === PoolTypeEnum.VALIDATOR){
+        if (poolConfig.poolType === PoolTypeEnum.VALIDATOR) {
           try {
             let objResp = await suiClient.getDynamicFieldObject({
               parentId: poolObject.poolId,
@@ -345,7 +347,7 @@ export async function getPoolInfo(poolType: any) {
               validatorStatus.pending = Number(dataContent.fields.value.fields.pending) / Number(stakeDecimal);
               poolObject.validatorStatus = validatorStatus;
             }
-          } catch (error){
+          } catch (error) {
             // console.error(error);
           }
         }
@@ -356,6 +358,73 @@ export async function getPoolInfo(poolType: any) {
   }
 
   return poolInfo;
+}
+
+// 取得 Pool 獎勵數量 資訊
+export async function getPoolRewardInfo(poolType: string) {
+
+  let rewardAmount: number = 0;
+
+  let poolId: string = poolTypeConfigMap.get(poolType).pool;
+
+  if (poolId !== "") {
+    switch (poolType) {
+      case PoolTypeEnum.VALIDATOR:
+
+        let stakedSuiAddressArray: any[] = [];
+
+        let poolObjectResp = await suiClient.getObject({
+          id: poolId,
+          options: {
+            showContent: true
+          }
+        });
+        if (poolObjectResp.data?.content) {
+
+          let poolData: any = poolObjectResp.data.content;
+          let rewards: any = poolData.fields.rewards;
+
+          let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
+            parentId: rewards.fields.id.id,
+            name: {
+              type: `0x1::type_name::TypeName`,
+              value: {
+                name: `0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui`
+              }
+            }
+          });
+          console.log(rewardsObjectResp);
+          if (rewardsObjectResp.data) {
+            let content: any = rewardsObjectResp.data.content;
+            let stakeSuiTable = await getTableData(content.fields.value.fields.id.id);
+            console.log(stakeSuiTable);
+
+            if (stakeSuiTable && stakeSuiTable.size > 0) {
+              for (let [key, value] of stakeSuiTable) {
+                stakedSuiAddressArray.push(value.fields.id.id);
+              }
+            }
+          }
+        }
+
+        console.log(stakedSuiAddressArray);
+
+        let reponse = await suiClient.getStakesByIds({
+          stakedSuiIds: stakedSuiAddressArray
+        });
+        console.log(reponse);
+
+        break;
+      case PoolTypeEnum.BUCKET_PROTOCOL:
+        break;
+      case PoolTypeEnum.SCALLOP_PROTOCOL:
+        break;
+    }
+  }
+
+  return {
+    rewardAmount: rewardAmount
+  }
 }
 
 // 取得 Stake Coin 對應的美元匯率
@@ -550,7 +619,7 @@ async function getShareSupply(shareSupplyId: string, decimal: number) {
 // 取得 用戶餘額 資訊 Map
 export async function getUserBalanceInfo(address: any, poolType: any) {
 
-  let userBalanceMap: Map<any,any> = new Map();
+  let userBalanceMap: Map<any, any> = new Map();
 
   for (let poolConfig of poolAddressConfigMap.values()) {
 
@@ -1147,6 +1216,14 @@ export async function packWithdrawTxb(
   return null;
 }
 
+function stringToHex(str: string) {
+  let hex = '';
+  for (let i = 0; i < str.length; i++) {
+    hex += ('0' + str.charCodeAt(i).toString(16)).slice(-2);
+  }
+  return hex;
+}
+
 // 建構 分配獎勵 的交易區塊
 export async function packAllocateRewardsTxb(
   poolId: string
@@ -1163,9 +1240,18 @@ export async function packAllocateRewardsTxb(
   const theLatestBeacon = await fetchBeaconByTime(drandClient, Date.now())
 
   const drand_round: number = theLatestBeacon.round;
-  const byteArray = hex16String2Vector(theLatestBeacon.signature);
 
   let validatorAddress = await getTopValidatorAddress();
+
+  let privateKeyByte = bls.utils.randomPrivateKey();
+  let publicKeyByte = bls.getPublicKey(privateKeyByte);
+
+  let drandRoundHex = stringToHex(drand_round.toString());
+
+  let messageSign = bls.sign(
+    drandRoundHex,
+    privateKeyByte,
+  );
 
   switch (poolType) {
     case PoolTypeEnum.VALIDATOR:
@@ -1176,8 +1262,9 @@ export async function packAllocateRewardsTxb(
         txb.object(SUI_SYSTEM_STATE_ID),
         txb.object(poolId),
         txb.pure.address(validatorAddress),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 
@@ -1199,8 +1286,9 @@ export async function packAllocateRewardsTxb(
         txb.object(poolConfig.shareSupply),
         txb.object(poolId),
         txb.object(BUCKET_FOUTAIN),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 
@@ -1223,8 +1311,9 @@ export async function packAllocateRewardsTxb(
         txb.object(poolId),
         txb.object(SCALLOP_VERSION),
         txb.object(SCALLOP_MARKET),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 

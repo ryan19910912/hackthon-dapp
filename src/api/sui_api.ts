@@ -5,6 +5,8 @@ import {
   HttpChainClient,
   HttpCachingChain,
 } from 'drand-client'
+import { bcs } from "@mysten/sui.js/bcs";
+import { bls12_381 as bls } from "@noble/curves/bls12-381";
 
 enum PoolTypeEnum {
   VALIDATOR = "VALIDATOR",
@@ -699,7 +701,7 @@ export async function getPoolInfoListV3(_poolType: any) {
 
         // 質押數量
         let statistics: any = new Object();
-        if (poolData.fields.statistics){
+        if (poolData.fields.statistics) {
           statistics.totalStakeAmount = poolData.fields.statistics.fields.total_amount / decimal;
           statistics.userStakeArray = poolData.fields.statistics.fields.user_set.fields.contents;
           statistics.userStakeAmountMap = await getTableData(poolData.fields.statistics.fields.user_amount_table.fields.id.id);
@@ -956,18 +958,18 @@ export async function getUserStakeInfoV3(
     let statistics: any = statisticsMap.get(poolType);
 
     if (statistics != null) {
-      // let totalStakeAmount = statistics.totalStakeAmount;
+      let totalStakeAmount = statistics.totalStakeAmount;
 
-      // let userStakeTotalAmount: number =
-      //   statistics.userStakeAmountMap.has(address)
-      //     ? statistics.userStakeAmountMap.get(address)
-      //     : 0;
+      let userStakeTotalAmount: number =
+        statistics.userStakeAmountMap.has(address)
+          ? statistics.userStakeAmountMap.get(address)
+          : 0;
 
-      // let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
+      let luckRate: number = userStakeTotalAmount == 0 ? 0 : (userStakeTotalAmount / totalStakeAmount) * 100
 
       userStakeInfoMap.set(poolType, {
-        // userStakeTotalAmount: userStakeTotalAmount,
-        // luckRate: luckRate,
+        userStakeTotalAmount: userStakeTotalAmount,
+        luckRate: luckRate,
         coinName: poolTypeCommonTypeMap.get(poolType).coinName,
         winnerInfoList: []
       });
@@ -1107,12 +1109,16 @@ export async function packStakeTxb(
   }
 
   if (coinsArray.length > 0) {
-    txb.mergeCoins(coinObjectId, coinsArray)
+    if (poolType !== PoolTypeEnum.VALIDATOR) {
+      console.log("mergeCoins");
+      txb.mergeCoins(coinObjectId, coinsArray)
+    }
   }
 
   let [realCoin]: any = [];
   if (needSplit) {
     if (poolType === PoolTypeEnum.VALIDATOR) {
+      console.log("needSplit");
       [realCoin] = txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]);
     } else {
       [realCoin] = txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]);
@@ -1125,7 +1131,7 @@ export async function packStakeTxb(
       let validatorAddress = await getTopValidatorAddress();
 
       args = [
-        // txb.object(GLOBAL_CONFIG_ID),
+        txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1550,6 +1556,14 @@ export async function packWithdrawTxbV2(
   return null;
 }
 
+function stringToHex(str: string) {
+  let hex = '';
+  for (let i = 0; i < str.length; i++) {
+    hex += ('0' + str.charCodeAt(i).toString(16)).slice(-2);
+  }
+  return hex;
+}
+
 // 建構 分配獎勵 的交易區塊
 export async function packAllocateRewardsTxb(
   poolId: string
@@ -1564,11 +1578,19 @@ export async function packAllocateRewardsTxb(
   let typeArgs: any[];
 
   const theLatestBeacon = await fetchBeaconByTime(drandClient, Date.now())
-
   const drand_round: number = theLatestBeacon.round;
   const byteArray = hex16String2Vector(theLatestBeacon.signature);
-
   let validatorAddress = await getTopValidatorAddress();
+
+  let privateKeyByte = bls.utils.randomPrivateKey();
+  let publicKeyByte = bls.getPublicKey(privateKeyByte);
+
+  let drandRoundHex = stringToHex(drand_round.toString());
+
+  let messageSign = bls.sign(
+    drandRoundHex,
+    privateKeyByte,
+  );
 
   switch (poolType) {
     case PoolTypeEnum.VALIDATOR:
@@ -1579,8 +1601,9 @@ export async function packAllocateRewardsTxb(
         txb.object(SUI_SYSTEM_STATE_ID),
         txb.object(poolId),
         txb.pure.address(validatorAddress),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 
@@ -1602,8 +1625,9 @@ export async function packAllocateRewardsTxb(
         txb.object(poolConfig.shareSupply),
         txb.object(poolId),
         txb.object(BUCKET_FOUTAIN),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 
@@ -1626,8 +1650,9 @@ export async function packAllocateRewardsTxb(
         txb.object(poolId),
         txb.object(SCALLOP_VERSION),
         txb.object(SCALLOP_MARKET),
-        txb.pure.u64(drand_round),
-        txb.pure(byteArray),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
         txb.object(SUI_CLOCK_ID)
       ];
 

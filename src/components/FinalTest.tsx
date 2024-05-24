@@ -9,7 +9,8 @@ import {
   getUserStakeInfo,
   getUserWinnerInfo,
   getRoundExpireTimeInfo,
-  getCanClaimRewardInfo
+  getCanClaimRewardInfo,
+  getPoolRewardInfo
 } from "../api/sui_api_final";
 import { useState, useEffect } from 'react';
 
@@ -68,6 +69,9 @@ export function Test() {
           poolInfo.poolList[0].claimedRewardInfoId
         );
         console.log(canClaimRewardInfo);
+
+        let poolRewardInfo = await getPoolRewardInfo("VALIDATOR");
+        console.log(poolRewardInfo);
       }
     }
     run();
