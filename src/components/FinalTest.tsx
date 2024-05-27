@@ -70,8 +70,12 @@ export function Test() {
         );
         console.log(canClaimRewardInfo);
 
-        let poolRewardInfo = await getPoolRewardInfo("VALIDATOR");
-        console.log(poolRewardInfo);
+        let vaildatorPoolRewardInfo = await getPoolRewardInfo("VALIDATOR");
+        console.log(vaildatorPoolRewardInfo);
+        let bucketPoolRewardInfo = await getPoolRewardInfo("BUCKET_PROTOCOL");
+        console.log(bucketPoolRewardInfo);
+        let scallopPoolRewardInfo = await getPoolRewardInfo("SCALLOP_PROTOCOL");
+        console.log(scallopPoolRewardInfo);
       }
     }
     run();

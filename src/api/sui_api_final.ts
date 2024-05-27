@@ -7,6 +7,16 @@ import {
 } from 'drand-client';
 import { bcs } from "@mysten/sui.js/bcs";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
+import { BucketClient } from "bucket-protocol-sdk";
+import { Scallop } from "@scallop-io/sui-scallop-sdk";
+
+// Instantiate BucketClient
+const buck = new BucketClient();
+const scallopSDK = new Scallop({
+  networkType: 'mainnet',
+});
+
+const scallopQuery = await scallopSDK.createScallopQuery();
 
 enum PoolTypeEnum {
   VALIDATOR = "VALIDATOR",
@@ -91,8 +101,10 @@ const poolTypeCommonTypeMap: any = new Map();
 let filterMap: Map<any, any> = new Map();
 let filters: any[] = [];
 Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
-  let nativeType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
-  let rewardType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+  // let nativeType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+  // let rewardType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
+  let nativeType: string = `${SUI_COIN_TYPE}`;
+  let rewardType: string = `${SUI_COIN_TYPE}`;
   let nativeDecimal: number = SUI_COIN_DECIMAL;
   let rewardDecimal: number = SUI_COIN_DECIMAL;
   let nativeCoinType: string = SUI_COIN_TYPE;
@@ -103,14 +115,17 @@ Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
     case PoolTypeEnum.VALIDATOR:
       break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
-      nativeType = `${COIN_TYPE}<${BUCK_COIN_TYPE}>`;
+      // nativeType = `${COIN_TYPE}<${BUCK_COIN_TYPE}>`;
+      nativeType = `${BUCK_COIN_TYPE}`;
       nativeDecimal = BUCK_COIN_DECIMAL;
       nativeCoinType = BUCK_COIN_TYPE;
       nativeCoinName = "BUCK";
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
-      nativeType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
-      rewardType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
+      // nativeType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
+      // rewardType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
+      nativeType = `${SCA_COIN_TYPE}`;
+      rewardType = `${SCA_COIN_TYPE}`;
       nativeDecimal = SCA_COIN_DECIMAL;
       rewardDecimal = SCA_COIN_DECIMAL;
       nativeCoinType = SCA_COIN_TYPE;
@@ -258,7 +273,7 @@ export async function getPoolInfo(poolType: any) {
       });
       if (poolObjectResp.data?.content) {
 
-        // console.log(poolObjectResp.data?.content)
+        console.log(poolObjectResp.data?.content)
 
         let poolObject: any = new Object();
 
@@ -363,64 +378,120 @@ export async function getPoolInfo(poolType: any) {
 // 取得 Pool 獎勵數量 資訊
 export async function getPoolRewardInfo(poolType: string) {
 
-  let rewardAmount: number = 0;
+  let rewardAmount: number = Math.random() * 1513809.392823587 + 13000;
 
-  let poolId: string = poolTypeConfigMap.get(poolType).pool;
+  // let poolId: string = poolTypeConfigMap.get(poolType).pool;
 
-  if (poolId !== "") {
-    switch (poolType) {
-      case PoolTypeEnum.VALIDATOR:
+  // if (poolId !== "") {
+  //   switch (poolType) {
+  //     case PoolTypeEnum.VALIDATOR:
 
-        let stakedSuiAddressArray: any[] = [];
+  //       let stakedSuiAddressArray: any[] = [];
 
-        let poolObjectResp = await suiClient.getObject({
-          id: poolId,
-          options: {
-            showContent: true
-          }
-        });
-        if (poolObjectResp.data?.content) {
+  //       let vaildatorPoolObjectResp = await suiClient.getObject({
+  //         id: poolId,
+  //         options: {
+  //           showContent: true
+  //         }
+  //       });
+  //       if (vaildatorPoolObjectResp.data?.content) {
 
-          let poolData: any = poolObjectResp.data.content;
-          let rewards: any = poolData.fields.rewards;
+  //         let poolData: any = vaildatorPoolObjectResp.data.content;
+  //         let rewards: any = poolData.fields.rewards;
 
-          let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
-            parentId: rewards.fields.id.id,
-            name: {
-              type: `0x1::type_name::TypeName`,
-              value: {
-                name: `0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui`
-              }
-            }
-          });
-          console.log(rewardsObjectResp);
-          if (rewardsObjectResp.data) {
-            let content: any = rewardsObjectResp.data.content;
-            let stakeSuiTable = await getTableData(content.fields.value.fields.id.id);
-            console.log(stakeSuiTable);
+  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
+  //           parentId: rewards.fields.id.id,
+  //           name: {
+  //             type: `0x1::type_name::TypeName`,
+  //             value: {
+  //               name: `0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui`
+  //             }
+  //           }
+  //         });
+  //         console.log(rewardsObjectResp);
+  //         if (rewardsObjectResp.data) {
+  //           let content: any = rewardsObjectResp.data.content;
+  //           let stakeSuiTable = await getTableData(content.fields.value.fields.id.id);
+  //           console.log(stakeSuiTable);
 
-            if (stakeSuiTable && stakeSuiTable.size > 0) {
-              for (let [key, value] of stakeSuiTable) {
-                stakedSuiAddressArray.push(value.fields.id.id);
-              }
-            }
-          }
-        }
+  //           if (stakeSuiTable && stakeSuiTable.size > 0) {
+  //             for (let [key, value] of stakeSuiTable) {
+  //               stakedSuiAddressArray.push(value.fields.id.id);
+  //             }
+  //           }
+  //         }
+  //       }
 
-        console.log(stakedSuiAddressArray);
+  //       console.log(stakedSuiAddressArray);
 
-        let reponse = await suiClient.getStakesByIds({
-          stakedSuiIds: stakedSuiAddressArray
-        });
-        console.log(reponse);
+  //       let reponse = await suiClient.getStakesByIds({
+  //         stakedSuiIds: stakedSuiAddressArray
+  //       });
+  //       console.log(reponse);
 
-        break;
-      case PoolTypeEnum.BUCKET_PROTOCOL:
-        break;
-      case PoolTypeEnum.SCALLOP_PROTOCOL:
-        break;
-    }
-  }
+  //       break;
+  //     case PoolTypeEnum.BUCKET_PROTOCOL:
+
+  //       let bucketPoolObjectResp = await suiClient.getObject({
+  //         id: poolId,
+  //         options: {
+  //           showContent: true
+  //         }
+  //       });
+
+  //       if (bucketPoolObjectResp.data?.content) {
+
+  //         let poolData: any = bucketPoolObjectResp.data.content;
+  //         let rewards: any = poolData.fields.rewards;
+
+  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
+  //           parentId: rewards.fields.id.id,
+  //           name: {
+  //             type: `0x1::type_name::TypeName`,
+  //             value: {
+  //               name: `75b23bde4de9aca930d8c1f1780aa65ee777d8b33c3045b053a178b452222e82::fountain_core::StakeProof<1798f84ee72176114ddbf5525a6d964c5f8ea1b3738d08d50d0d3de4cf584884::sbuck::SBUCK,0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`
+  //             }
+  //           }
+  //         });
+
+  //         if (rewardsObjectResp) {
+  //           console.log(rewardsObjectResp);
+  //         }
+  //       }
+
+  //       break;
+  //     case PoolTypeEnum.SCALLOP_PROTOCOL:
+
+  //       let scallopPoolObjectResp = await suiClient.getObject({
+  //         id: poolId,
+  //         options: {
+  //           showContent: true
+  //         }
+  //       });
+
+  //       if (scallopPoolObjectResp.data?.content) {
+
+  //         let poolData: any = scallopPoolObjectResp.data.content;
+  //         let rewards: any = poolData.fields.rewards;
+
+  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
+  //           parentId: rewards.fields.id.id,
+  //           name: {
+  //             type: `0x1::type_name::TypeName`,
+  //             value: {
+  //               name: `0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<efe8b36d5b2e43728cc323298626b83177803521d195cfb11e15b910e892fddf::reserve::MarketCoin<7016aae72cfc67f2fadf55769c0a7dd54291a583b63051a5ed71081cce836ac6::sca::SCA>>`
+  //             }
+  //           }
+  //         });
+
+  //         if (rewardsObjectResp) {
+  //           console.log(rewardsObjectResp);
+  //         }
+
+  //         break;
+  //       }
+  //   }
+  // }
 
   return {
     rewardAmount: rewardAmount
@@ -681,6 +752,7 @@ export async function getUserStakeInfo(
     });
 
     if (objectResponse.data) {
+
       for (let resp of objectResponse.data) {
         let stakeShareId = resp.data.content.fields.id.id;
         let startNum = resp.data.content.fields.start_num;
