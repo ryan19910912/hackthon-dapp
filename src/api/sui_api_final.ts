@@ -9,9 +9,11 @@ import { bcs } from "@mysten/sui.js/bcs";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { BucketClient } from "bucket-protocol-sdk";
 import { Scallop } from "@scallop-io/sui-scallop-sdk";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, get, set, child } from "firebase/database";
 
 // Instantiate BucketClient
-const buck = new BucketClient();
+const bucket = new BucketClient();
 const scallopSDK = new Scallop({
   networkType: 'mainnet',
 });
@@ -23,6 +25,16 @@ enum PoolTypeEnum {
   BUCKET_PROTOCOL = "BUCKET_PROTOCOL",
   SCALLOP_PROTOCOL = "SCALLOP_PROTOCOL"
 }
+
+const FIREBASE_ENV: string = `${import.meta.env.VITE_FIREBASE_ENV}`;
+const FIREBASE_CONFIG: string = `${import.meta.env.VITE_FIREBASE_CONFIG}`;
+
+const FIREBASE_APP = initializeApp(JSON.parse(FIREBASE_CONFIG));
+const FIREBASE_DB = getDatabase(FIREBASE_APP);
+const DB_REF = ref(FIREBASE_DB);
+const DB_ROOT_PATH = `/demo/${FIREBASE_ENV}`;
+const DB_CHILD_REWARD_INFO = `rewardInfo`;
+const DB_CHILD_STAKE_INFO = `stakeInfo`;
 
 // 智能合約地址
 const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
@@ -171,6 +183,7 @@ const options = {
 const chain = new HttpCachingChain(`${chainUrl}${chainHash}`, options);
 const drandClient = new HttpChainClient(chain, options)
 
+// 取得 Pool 類型陣列
 export function getPoolTypeList() {
   return Array.from(poolTypeConfigMap.keys());
 }
@@ -273,7 +286,7 @@ export async function getPoolInfo(poolType: any) {
       });
       if (poolObjectResp.data?.content) {
 
-        console.log(poolObjectResp.data?.content)
+        // console.log(poolObjectResp.data?.content)
 
         let poolObject: any = new Object();
 
@@ -367,6 +380,20 @@ export async function getPoolInfo(poolType: any) {
           }
         }
 
+        let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}`;
+        let dbTotalStakeAmount = 0;
+
+        let snapshot = await get(child(DB_REF, dbPath));
+        if (snapshot.exists()) {
+          dbTotalStakeAmount = snapshot.val().totalStakeAmount;
+        }
+
+        if (dbTotalStakeAmount !== statistics.totalDeposit) {
+          set(ref(FIREBASE_DB, dbPath), {
+            totalStakeAmount: statistics.totalDeposit
+          });
+        }
+
         poolList.push(poolObject);
       }
     }
@@ -375,127 +402,118 @@ export async function getPoolInfo(poolType: any) {
   return poolInfo;
 }
 
+function diffDay(lastDate: string, earlyDate: string) {
+  return (Date.parse(lastDate) - Date.parse(earlyDate));
+}
+
+function getNowDateFormatStr() {
+  let newTime = new Date();
+  let year = newTime.getFullYear();
+  let mon = newTime.getMonth() + 1 < 10 ? "0" + (newTime.getMonth() + 1) : newTime.getMonth() + 1;
+  let date = newTime.getDate() < 10 ? "0" + newTime.getDate() : newTime.getDate();
+  let str = `${year}-${mon}-${date}`
+  return str;
+}
+
 // 取得 Pool 獎勵數量 資訊
 export async function getPoolRewardInfo(poolType: string) {
 
-  let rewardAmount: number = Math.random() * 1513809.392823587 + 13000;
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
+  let stakeDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_STAKE_INFO}`;
 
-  // let poolId: string = poolTypeConfigMap.get(poolType).pool;
+  let rewardAmount: string = "0";
+  let oldRewardAmount: number = 0;
+  let oldTime: string = "";
+  let newRewardAmount: number = 0;
+  let newTime: string = "";
+  let totalDeposit: number = 0;
+  let stakePoolAddress: any = null;
 
-  // if (poolId !== "") {
-  //   switch (poolType) {
-  //     case PoolTypeEnum.VALIDATOR:
+  let nowDateFormatStr = getNowDateFormatStr();
+  let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
 
-  //       let stakedSuiAddressArray: any[] = [];
+  if (rewardSnapshot.exists()) {
+    oldRewardAmount = rewardSnapshot.val().old;
+    if (isNaN(oldRewardAmount)){
+      oldRewardAmount = 0;
+    }
+    oldTime = rewardSnapshot.val().oldTime;
+    newRewardAmount = rewardSnapshot.val().new;
+    if (isNaN(newRewardAmount)){
+      newRewardAmount = 0;
+    }
+    newTime = rewardSnapshot.val().newTime;
+  }
 
-  //       let vaildatorPoolObjectResp = await suiClient.getObject({
-  //         id: poolId,
-  //         options: {
-  //           showContent: true
-  //         }
-  //       });
-  //       if (vaildatorPoolObjectResp.data?.content) {
+  let stakeSnapshot = await get(child(DB_REF, stakeDbPath));
 
-  //         let poolData: any = vaildatorPoolObjectResp.data.content;
-  //         let rewards: any = poolData.fields.rewards;
+  if (stakeSnapshot.exists()) {
+    totalDeposit = stakeSnapshot.val().totalStakeAmount;
+    stakePoolAddress = stakeSnapshot.val().stakePoolAddress;
+  }
 
-  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
-  //           parentId: rewards.fields.id.id,
-  //           name: {
-  //             type: `0x1::type_name::TypeName`,
-  //             value: {
-  //               name: `0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui`
-  //             }
-  //           }
-  //         });
-  //         console.log(rewardsObjectResp);
-  //         if (rewardsObjectResp.data) {
-  //           let content: any = rewardsObjectResp.data.content;
-  //           let stakeSuiTable = await getTableData(content.fields.value.fields.id.id);
-  //           console.log(stakeSuiTable);
+  if (oldTime === "") {
+    oldTime = nowDateFormatStr;
+  } else if (diffDay(nowDateFormatStr, oldTime) > 1) {
+    oldRewardAmount = newRewardAmount;
+    oldTime = newTime;
+  }
 
-  //           if (stakeSuiTable && stakeSuiTable.size > 0) {
-  //             for (let [key, value] of stakeSuiTable) {
-  //               stakedSuiAddressArray.push(value.fields.id.id);
-  //             }
-  //           }
-  //         }
-  //       }
+  switch (poolType) {
+    case PoolTypeEnum.VALIDATOR:
+      let topValidator = await getTopValidator(stakePoolAddress);
+      rewardAmount = Number(totalDeposit * topValidator.apy + oldRewardAmount).toFixed(10);
+      break;
+    case PoolTypeEnum.BUCKET_PROTOCOL:
+      let bucketApy = await calculateBucketApy();
+      rewardAmount = Number(totalDeposit * bucketApy + oldRewardAmount).toFixed(10);
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL:
+      let marketData = await scallopQuery.queryMarket();
+      let scallopApy: number = 0;
+      if (marketData.pools.sca){
+        scallopApy = marketData.pools.sca.supplyApy;
+      }
+      rewardAmount = Number(totalDeposit * scallopApy + oldRewardAmount).toFixed(10);
+      break;
+  }
 
-  //       console.log(stakedSuiAddressArray);
-
-  //       let reponse = await suiClient.getStakesByIds({
-  //         stakedSuiIds: stakedSuiAddressArray
-  //       });
-  //       console.log(reponse);
-
-  //       break;
-  //     case PoolTypeEnum.BUCKET_PROTOCOL:
-
-  //       let bucketPoolObjectResp = await suiClient.getObject({
-  //         id: poolId,
-  //         options: {
-  //           showContent: true
-  //         }
-  //       });
-
-  //       if (bucketPoolObjectResp.data?.content) {
-
-  //         let poolData: any = bucketPoolObjectResp.data.content;
-  //         let rewards: any = poolData.fields.rewards;
-
-  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
-  //           parentId: rewards.fields.id.id,
-  //           name: {
-  //             type: `0x1::type_name::TypeName`,
-  //             value: {
-  //               name: `75b23bde4de9aca930d8c1f1780aa65ee777d8b33c3045b053a178b452222e82::fountain_core::StakeProof<1798f84ee72176114ddbf5525a6d964c5f8ea1b3738d08d50d0d3de4cf584884::sbuck::SBUCK,0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`
-  //             }
-  //           }
-  //         });
-
-  //         if (rewardsObjectResp) {
-  //           console.log(rewardsObjectResp);
-  //         }
-  //       }
-
-  //       break;
-  //     case PoolTypeEnum.SCALLOP_PROTOCOL:
-
-  //       let scallopPoolObjectResp = await suiClient.getObject({
-  //         id: poolId,
-  //         options: {
-  //           showContent: true
-  //         }
-  //       });
-
-  //       if (scallopPoolObjectResp.data?.content) {
-
-  //         let poolData: any = scallopPoolObjectResp.data.content;
-  //         let rewards: any = poolData.fields.rewards;
-
-  //         let rewardsObjectResp: any = await suiClient.getDynamicFieldObject({
-  //           parentId: rewards.fields.id.id,
-  //           name: {
-  //             type: `0x1::type_name::TypeName`,
-  //             value: {
-  //               name: `0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<efe8b36d5b2e43728cc323298626b83177803521d195cfb11e15b910e892fddf::reserve::MarketCoin<7016aae72cfc67f2fadf55769c0a7dd54291a583b63051a5ed71081cce836ac6::sca::SCA>>`
-  //             }
-  //           }
-  //         });
-
-  //         if (rewardsObjectResp) {
-  //           console.log(rewardsObjectResp);
-  //         }
-
-  //         break;
-  //       }
-  //   }
-  // }
+  set(ref(FIREBASE_DB, rewardDbPath), {
+    old: oldRewardAmount,
+    oldTime: oldTime,
+    new: rewardAmount,
+    newTime: nowDateFormatStr
+  });
 
   return {
     rewardAmount: rewardAmount
   }
+}
+
+// Bucket 計算 APY
+async function calculateBucketApy() {
+  const lpPrice = 1;
+  let prices: any = await bucket.getPrices();
+  let rewardsPrice = prices.SUI;
+  let fountain = await bucket.getFountain(BUCKET_FOUTAIN);
+
+  let bucketTotalRewardAmount = getBucketRewardTotalAmount(fountain);
+
+  let apr = (
+    ((bucketTotalRewardAmount * 365) / ((fountain.totalWeight / 10 ** 9) * lpPrice)) *
+    rewardsPrice
+  );
+
+  let apy = Math.pow((1 + apr/365), 365) - 1;
+  
+  return apy;
+}
+
+// 取得 Bucket Reward Total Amount
+function getBucketRewardTotalAmount(fountain: any) {
+  let flowAmount = fountain.flowAmount;
+  let flowInterval = fountain.flowInterval;
+  return (flowAmount / 10 ** 9 / flowInterval) * 86400000;
 }
 
 // 取得 Stake Coin 對應的美元匯率
@@ -976,7 +994,7 @@ export async function packStakeTxb(
   switch (poolType) {
     case PoolTypeEnum.VALIDATOR:
 
-      let validatorAddress = await getTopValidatorAddress();
+      let validatorAddress = (await getTopValidator(null)).address;
 
       args = [
         // txb.object(GLOBAL_CONFIG_ID),
@@ -1102,11 +1120,13 @@ export async function packWithdrawTxb(
         if (dynamicDataResp.data) {
           for (let dynamicData of dynamicDataResp.data) {
             if (dynamicData.objectType === "u64") {
+              // console.log(dynamicData);
               let dynamicObjectMap = await getTableRawData(
                 stakePoolShareId,
                 dynamicData.name.type,
                 dynamicData.name.value
               );
+              // console.log(dynamicObjectMap);
               let startNum = resp.data.content.fields.start_num;
               let endNum = resp.data.content.fields.end_num;
               let stakeAmount = dynamicObjectMap.get(stakePoolShareId);
@@ -1116,7 +1136,11 @@ export async function packWithdrawTxb(
               let rangeNum = endNum - startNum + 1
               let numRate = rangeNum / stakeAmount;
 
+              // console.log(withdrawAmount);
+              // console.log(totalAmount);
+
               if (withdrawAmount < totalAmount) {
+                // console.log("切割");
                 let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
                 // 切割 share
                 splitArgs = [
@@ -1135,6 +1159,8 @@ export async function packWithdrawTxb(
                   arguments: splitArgs,
                   typeArguments: splitTypeArgs
                 });
+
+                // console.log(newShare);
 
                 switch (poolType) {
                   case PoolTypeEnum.VALIDATOR:
@@ -1200,10 +1226,9 @@ export async function packWithdrawTxb(
                       typeArguments: typeArgs
                     });
 
-                    needBreak = true;
-
                     break;
                 }
+                needBreak = true;
                 break;
               } else {
                 switch (poolType) {
@@ -1313,7 +1338,7 @@ export async function packAllocateRewardsTxb(
 
   const drand_round: number = theLatestBeacon.round;
 
-  let validatorAddress = await getTopValidatorAddress();
+  let validatorAddress = (await getTopValidator(null)).address;
 
   let privateKeyByte = bls.utils.randomPrivateKey();
   let publicKeyByte = bls.getPublicKey(privateKeyByte);
@@ -1401,6 +1426,28 @@ export async function packAllocateRewardsTxb(
   return txb;
 }
 
+// 重設 Firebase 的 RealTime Database 資料
+// 當 packAllocateRewardsTxb 執行成功後，要來呼叫這支 API
+export async function resetRewardAmount(poolType: string){
+
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
+  let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
+  let newRewardAmount: number = 0;
+  let newTime: string = "";
+
+  if (rewardSnapshot.exists()) {
+    newRewardAmount = rewardSnapshot.val().new;
+    newTime = rewardSnapshot.val().newTime;
+  }
+
+  set(ref(FIREBASE_DB, rewardDbPath), {
+    old: 0,
+    oldTime: newTime,
+    new: newRewardAmount,
+    newTime: newTime
+  });
+}
+
 // 建構 領取獎勵 的交易區塊
 export async function packClaimRewardTxb(
   poolType: string,
@@ -1479,20 +1526,28 @@ export async function packClaimRewardTxb(
   return txb;
 }
 
-// 取得 供應 資訊
-async function getTopValidatorAddress() {
+// 取得 最高 apy 的 Validator 資訊
+async function getTopValidator(queryAddress: any) {
   let objectResponse = await suiClient.getValidatorsApy();
   let address: string = "";
   let apy: number = 0;
   if (objectResponse.apys) {
-    objectResponse.apys.map((apyObj: any) => {
+    for (let apyObj of objectResponse.apys) {
+      if (queryAddress && queryAddress === apyObj.address) {
+        apy = apyObj.apy;
+        address = apyObj.address;
+        break;
+      }
       if (apyObj.apy > apy) {
         apy = apyObj.apy;
         address = apyObj.address;
       }
-    })
+    }
   }
-  return address;
+  return {
+    address: address,
+    apy: apy
+  };
 }
 
 function hex16String2Vector(str: string) {

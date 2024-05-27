@@ -1131,7 +1131,7 @@ export async function packStakeTxb(
       let validatorAddress = await getTopValidatorAddress();
 
       args = [
-        txb.object(GLOBAL_CONFIG_ID),
+        // txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
