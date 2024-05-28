@@ -30,7 +30,7 @@ function App() {
           px="4"
           style={{ background: "var(--gray-a2)", minHeight: 500 }}
         >
-          <Pool />
+          {/* <Pool /> */}
           <Test />
         </Container>
       </Container>

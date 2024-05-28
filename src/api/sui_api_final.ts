@@ -350,8 +350,9 @@ export async function getPoolInfo(poolType: any) {
         // 上個 Round 的獎勵數量
         let claimableMapResp = await getTableData(poolData.fields.claimable.fields.id.id);
         let lastRewardBalance: number = 0;
+        console.log(claimableMapResp);
         for (let [key, value] of claimableMapResp) {
-          lastRewardBalance = Number(lastRewardBalance) + Number(value.fields.balance);
+          lastRewardBalance = Number(lastRewardBalance) + Number(value);
         }
         // 上個 Round 的獎勵數量
         poolObject.lastRewardBalance = lastRewardBalance / rewardDecimal;
