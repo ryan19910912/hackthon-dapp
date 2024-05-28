@@ -36,6 +36,8 @@ const DB_ROOT_PATH = `/demo/${FIREBASE_ENV}`;
 const DB_CHILD_REWARD_INFO = `rewardInfo`;
 const DB_CHILD_STAKE_INFO = `stakeInfo`;
 
+const SUI_VISION_API_KEY = `${import.meta.env.VITE_SUI_VISION_API_KEY}`;
+
 // 智能合約地址
 const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
 // 全域設定 Share Object 地址
@@ -427,19 +429,18 @@ export async function getPoolRewardInfo(poolType: string) {
   let newRewardAmount: number = 0;
   let newTime: string = "";
   let totalDeposit: number = 0;
-  let stakePoolAddress: any = null;
 
   let nowDateFormatStr = getNowDateFormatStr();
   let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
 
   if (rewardSnapshot.exists()) {
     oldRewardAmount = rewardSnapshot.val().old;
-    if (isNaN(oldRewardAmount)){
+    if (isNaN(oldRewardAmount)) {
       oldRewardAmount = 0;
     }
     oldTime = rewardSnapshot.val().oldTime;
     newRewardAmount = rewardSnapshot.val().new;
-    if (isNaN(newRewardAmount)){
+    if (isNaN(newRewardAmount)) {
       newRewardAmount = 0;
     }
     newTime = rewardSnapshot.val().newTime;
@@ -449,7 +450,6 @@ export async function getPoolRewardInfo(poolType: string) {
 
   if (stakeSnapshot.exists()) {
     totalDeposit = stakeSnapshot.val().totalStakeAmount;
-    stakePoolAddress = stakeSnapshot.val().stakePoolAddress;
   }
 
   if (oldTime === "") {
@@ -461,20 +461,48 @@ export async function getPoolRewardInfo(poolType: string) {
 
   switch (poolType) {
     case PoolTypeEnum.VALIDATOR:
-      let topValidator = await getTopValidator(stakePoolAddress);
-      rewardAmount = Number(totalDeposit * topValidator.apy + oldRewardAmount).toFixed(10);
+      let topValidator = await getTopValidator(null);
+
+      let data = {
+        addresses: [topValidator]
+      }
+
+      let suiVisionResp = await fetch(`https://api.blockberry.one/sui/v1/validators/metadata`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": SUI_VISION_API_KEY
+        },
+        body: JSON.stringify(data), // body data type must match "Content-Type" header
+      });
+
+      let validatorInfo = await suiVisionResp.json();
+
+      if (Object.keys(validatorInfo).length !== 0) {
+        let topValidatorTotalDeposit: number = Number(validatorInfo[topValidator.address].stakeAmount) / SUI_COIN_DECIMAL;
+        let topValidatorTotalReward: number = topValidatorTotalDeposit * topValidator.apy;
+
+        rewardAmount = Number(topValidatorTotalReward * totalDeposit / topValidatorTotalDeposit + oldRewardAmount).toFixed(15);
+      }
       break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
-      let bucketApy = await calculateBucketApy();
-      rewardAmount = Number(totalDeposit * bucketApy + oldRewardAmount).toFixed(10);
+      let bucketStakeInfo: any = await getBucketStakeInfo();
+      let bucketRewardAmount: number = Number(bucketStakeInfo.rewardAmount);
+      let bucketStakeAmount: number = Number(bucketStakeInfo.depositAmount);
+
+      rewardAmount = Number(bucketRewardAmount * totalDeposit / bucketStakeAmount + oldRewardAmount).toFixed(15);
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
       let marketData = await scallopQuery.queryMarket();
       let scallopApy: number = 0;
-      if (marketData.pools.sca){
+      let scallopSupplyAmount: number = 0;
+      let scallopRewaedAmount: number = 0;
+      if (marketData.pools.sca) {
         scallopApy = marketData.pools.sca.supplyApy;
+        scallopSupplyAmount = marketData.pools.sca.supplyCoin;
+        scallopRewaedAmount = scallopSupplyAmount * scallopApy;
       }
-      rewardAmount = Number(totalDeposit * scallopApy + oldRewardAmount).toFixed(10);
+      rewardAmount = Number(scallopRewaedAmount * totalDeposit / scallopSupplyAmount + oldRewardAmount).toFixed(15);
       break;
   }
 
@@ -491,22 +519,29 @@ export async function getPoolRewardInfo(poolType: string) {
 }
 
 // Bucket 計算 APY
-async function calculateBucketApy() {
+async function calculateBucketApy(fountain: any) {
   const lpPrice = 1;
   let prices: any = await bucket.getPrices();
   let rewardsPrice = prices.SUI;
-  let fountain = await bucket.getFountain(BUCKET_FOUTAIN);
-
   let bucketTotalRewardAmount = getBucketRewardTotalAmount(fountain);
-
   let apr = (
-    ((bucketTotalRewardAmount * 365) / ((fountain.totalWeight / 10 ** 9) * lpPrice)) *
-    rewardsPrice
+    ((bucketTotalRewardAmount * 365) / ((fountain.totalWeight / 10 ** 9) * lpPrice)) * rewardsPrice
   );
-
-  let apy = Math.pow((1 + apr/365), 365) - 1;
-  
+  let apy = Math.pow((1 + apr / 365), 365) - 1;
   return apy;
+}
+
+async function getBucketStakeInfo() {
+  let fountain = await bucket.getFountain(BUCKET_FOUTAIN);
+  let depositAmount = fountain.flowAmount;
+  let apy = await calculateBucketApy(fountain);
+  let rewardAmount = getBucketRewardTotalAmount(fountain);
+
+  return {
+    depositAmount: depositAmount,
+    apy: apy,
+    rewardAmount: rewardAmount
+  }
 }
 
 // 取得 Bucket Reward Total Amount
@@ -979,7 +1014,9 @@ export async function packStakeTxb(
   }
 
   if (coinsArray.length > 0) {
-    txb.mergeCoins(coinObjectId, coinsArray)
+    if (poolType !== PoolTypeEnum.VALIDATOR) {
+      txb.mergeCoins(coinObjectId, coinsArray);
+    }
   }
 
   let [realCoin]: any = [];
@@ -1083,6 +1120,29 @@ export async function packWithdrawTxb(
     let poolCommonType = poolTypeCommonTypeMap.get(poolType);
     let totalAmount: number = 0;
     let needBreak: boolean = false;
+
+    let limitWithdrawAlert = false;
+    let limitWithdrawAmount = 0;
+
+    switch (poolType) {
+      case PoolTypeEnum.VALIDATOR:
+        limitWithdrawAlert = withdrawAmount < 1
+        limitWithdrawAmount = 1;
+        break;
+      case PoolTypeEnum.BUCKET_PROTOCOL:
+        limitWithdrawAlert = withdrawAmount < 0.01
+        limitWithdrawAmount = 0.01;
+        break;
+      case PoolTypeEnum.SCALLOP_PROTOCOL:
+        limitWithdrawAlert = withdrawAmount < 0.01
+        limitWithdrawAmount = 0.01;
+        break;
+    }
+
+    if (limitWithdrawAlert){
+      alert(`The minimum withdraw amount is ${limitWithdrawAmount} ${poolCommonType.nativeCoinName}`);
+      return null;
+    }
 
     let objectResponse: any = await suiClient.getOwnedObjects({
       owner: address,
@@ -1428,7 +1488,7 @@ export async function packAllocateRewardsTxb(
 
 // 重設 Firebase 的 RealTime Database 資料
 // 當 packAllocateRewardsTxb 執行成功後，要來呼叫這支 API
-export async function resetRewardAmount(poolType: string){
+export async function resetRewardAmount(poolType: string) {
 
   let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
   let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
