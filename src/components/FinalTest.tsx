@@ -14,7 +14,8 @@ import {
   packStakeTxb,
   packWithdrawTxb,
   packAllocateRewardsTxb,
-  packClaimRewardTxb
+  packClaimRewardTxb,
+  resetRewardAmount
 } from "../api/sui_api_final";
 import { useState, useEffect } from 'react';
 
@@ -196,6 +197,7 @@ export function Test() {
                       {
                         onSuccess: (successResult) => {
                           console.log('executed transaction block success', successResult);
+                          resetRewardAmount(poolType);
                         },
                         onError: (errorResult) => {
                           console.error('executed transaction block error', errorResult);
