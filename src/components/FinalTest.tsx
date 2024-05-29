@@ -44,7 +44,7 @@ export function Test() {
           console.log(`${pool.poolType} Start !!`);
 
           // 取得 已領取獎勵 資訊
-          let claimedRewardMap = await getClaimedRewardInfo(pool.claimedRewardInfoId, []);
+          let claimedRewardMap = await getClaimedRewardInfo(pool.claimedRewardInfoId, [], pool.currentRound, pool.poolType);
           console.log(claimedRewardMap);
 
           // 取得 Round 中獎號碼 資訊

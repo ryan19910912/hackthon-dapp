@@ -536,9 +536,11 @@ export async function getUsdRateByPoolType(poolType: string) {
 }
 
 // 取得 已領取獎勵 資訊 Map <round, userAddress>
-export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArray: any[]) {
+export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArray: any[], currentRound: number, poolType: string) {
 
   let claimedRewardMap: Map<any, any> = new Map();
+
+  let rewardDecimal = poolTypeCommonTypeMap.get(poolType).rewardDecimal;
 
   if (roundArray && roundArray.length > 0) {
     for (let round of roundArray) {
@@ -550,11 +552,20 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
         }
       });
       if (claimedRewardObjectResp.data) {
+        console.log(claimedRewardObjectResp.data);
         let content: any = claimedRewardObjectResp.data.content;
-        claimedRewardMap.set(content.fields.name, content.fields.value);
+        claimedRewardMap.set(content.fields.name, {
+          rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
+          winner: content.fields.value.fields.winner
+        });
       }
     }
   } else {
+
+    for (let roundNum = 1; roundNum < currentRound ; roundNum++){
+      claimedRewardMap.set(roundNum.toString(), {});
+    }
+
     let claimedRewardDynamicFieldsResp = await suiClient.getDynamicFields({
       parentId: claimedRewardInfoId
     });
@@ -569,8 +580,12 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
           }
         });
         if (claimedRewardObjectResp.data) {
+          console.log(claimedRewardObjectResp.data);
           let content: any = claimedRewardObjectResp.data.content;
-          claimedRewardMap.set(content.fields.name, content.fields.value);
+          claimedRewardMap.set(content.fields.name, {
+            rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
+            winner: content.fields.value.fields.winner
+          });
         }
       }
     }
@@ -808,13 +823,16 @@ export async function getCanClaimRewardInfo(
 ) {
   let canClaimRewardMap: Map<any, any> = new Map();
 
+  let poolType = poolAddressConfigMap.get(poolId).poolType;
+
   let roundArray: any[] = [];
   // 已領獎資訊
-  let claimedRewardInfo = await getClaimedRewardInfo(claimedRewardInfoId, []);
+  let claimedRewardInfo = await getClaimedRewardInfo(claimedRewardInfoId, [], currentRound, poolType);
   let claimedRewardMap = claimedRewardInfo.claimedRewardMap;
 
   for (let roundNum = 1; roundNum < currentRound; roundNum++) {
-    if (claimedRewardMap.has(roundNum.toString())) {
+    let claimObject = claimedRewardMap.get(roundNum.toString());
+    if (Object.keys(claimObject).length === 0) {
       continue;
     } else {
       roundArray.push(roundNum);
@@ -919,6 +937,7 @@ async function getTableRawData(fieldId: string, type: string, value: unknown) {
 
   const tableMap = new Map();
   if (response.data) {
+    console.log(response.data);
     let content: any = response.data.content;
     let map_key = content.fields.name;
     let map_value = content.fields.value;
