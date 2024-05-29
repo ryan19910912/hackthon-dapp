@@ -15,7 +15,9 @@ import {
   packWithdrawTxb,
   packAllocateRewardsTxb,
   packClaimRewardTxb,
-  resetRewardAmount
+  resetRewardAmount,
+  saveClaimDigest,
+  getClaimDigestList
 } from "../api/sui_api_final";
 import { useState, useEffect } from 'react';
 
@@ -97,6 +99,9 @@ export function Test() {
           poolObject.winnerInfoList = userWinnerInfo.winnerInfoList;
 
           poolObjectMap.set(pool.poolType, poolObject);
+
+          let claimSuccessDigestList = await getClaimDigestList(pool.poolType, account.address);
+          console.log(claimSuccessDigestList);
         }
 
         setPoolObjectMap(poolObjectMap);
@@ -229,6 +234,7 @@ export function Test() {
                       {
                         onSuccess: (successResult) => {
                           console.log('executed transaction block success', successResult);
+                          saveClaimDigest(poolType, account.address, successResult);
                         },
                         onError: (errorResult) => {
                           console.error('executed transaction block error', errorResult);

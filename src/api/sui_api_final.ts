@@ -36,6 +36,7 @@ const DB_ROOT_PATH = `/demo/${FIREBASE_ENV}`;
 const DB_CHILD_REWARD_INFO = `rewardInfo`;
 const DB_CHILD_STAKE_INFO = `stakeInfo`;
 
+const SUI_VISION_DOMAIN = `${import.meta.env.VITE_SUI_VISION_DOMAIN}`;
 const SUI_VISION_API_KEY = `${import.meta.env.VITE_SUI_VISION_API_KEY}`;
 
 // 智能合約地址
@@ -288,8 +289,6 @@ export async function getPoolInfo(poolType: any) {
       });
       if (poolObjectResp.data?.content) {
 
-        // console.log(poolObjectResp.data?.content)
-
         let poolObject: any = new Object();
 
         let poolData: any = poolObjectResp.data.content;
@@ -352,7 +351,7 @@ export async function getPoolInfo(poolType: any) {
         // 上個 Round 的獎勵數量
         let claimableMapResp = await getTableData(poolData.fields.claimable.fields.id.id);
         let lastRewardBalance: number = 0;
-        console.log(claimableMapResp);
+
         for (let [key, value] of claimableMapResp) {
           lastRewardBalance = Number(lastRewardBalance) + Number(value);
         }
@@ -495,15 +494,16 @@ export async function getPoolRewardInfo(poolType: string) {
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
       let marketData = await scallopQuery.queryMarket();
-      let scallopApy: number = 0;
-      let scallopSupplyAmount: number = 0;
-      let scallopRewaedAmount: number = 0;
       if (marketData.pools.sca) {
-        scallopApy = marketData.pools.sca.supplyApy;
-        scallopSupplyAmount = marketData.pools.sca.supplyCoin;
-        scallopRewaedAmount = scallopSupplyAmount * scallopApy;
+        let scallopSupplyApy = marketData.pools.sca.supplyApy;
+        let scallopBorrowApy = marketData.pools.sca.borrowApy;
+        let scallopCoinPrice = marketData.pools.sca.coinPrice;
+        let scallopBorrowAmount = marketData.pools.sca.borrowCoin;
+        let scallopSupplyAmount = marketData.pools.sca.supplyCoin;
+        let scallopRewardAmount = scallopSupplyAmount * scallopSupplyApy ;
+
+        rewardAmount = Number(scallopRewardAmount * totalDeposit / scallopSupplyAmount / scallopBorrowAmount + oldRewardAmount).toFixed(15);
       }
-      rewardAmount = Number(scallopRewaedAmount * totalDeposit / scallopSupplyAmount + oldRewardAmount).toFixed(15);
       break;
   }
 
@@ -587,7 +587,6 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
         }
       });
       if (claimedRewardObjectResp.data) {
-        console.log(claimedRewardObjectResp.data);
         let content: any = claimedRewardObjectResp.data.content;
         claimedRewardMap.set(content.fields.name, {
           rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
@@ -615,7 +614,6 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
           }
         });
         if (claimedRewardObjectResp.data) {
-          console.log(claimedRewardObjectResp.data);
           let content: any = claimedRewardObjectResp.data.content;
           claimedRewardMap.set(content.fields.name, {
             rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
@@ -886,8 +884,14 @@ export async function getCanClaimRewardInfo(
     let expireTime = roundExpireTimeMap.get(round);
     if (expireTime) {
       if (nowTime > new Date(Number(expireTime))) {
-        // console.error(`round ${round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+        console.error(`round ${round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
         continue;
+      } else {
+        canClaimRewardMap.set(round, {
+          round: round,
+          luckNum: luckNum,
+          expireTime: expireTime
+        });
       }
     } else {
       canClaimRewardMap.set(round, {
@@ -972,7 +976,6 @@ async function getTableRawData(fieldId: string, type: string, value: unknown) {
 
   const tableMap = new Map();
   if (response.data) {
-    console.log(response.data);
     let content: any = response.data.content;
     let map_key = content.fields.name;
     let map_value = content.fields.value;
@@ -1200,13 +1203,11 @@ export async function packWithdrawTxb(
         if (dynamicDataResp.data) {
           for (let dynamicData of dynamicDataResp.data) {
             if (dynamicData.objectType === "u64") {
-              // console.log(dynamicData);
               let dynamicObjectMap = await getTableRawData(
                 stakePoolShareId,
                 dynamicData.name.type,
                 dynamicData.name.value
               );
-              // console.log(dynamicObjectMap);
               let startNum = resp.data.content.fields.start_num;
               let endNum = resp.data.content.fields.end_num;
               let stakeAmount = dynamicObjectMap.get(stakePoolShareId);
@@ -1216,11 +1217,7 @@ export async function packWithdrawTxb(
               let rangeNum = endNum - startNum + 1
               let numRate = rangeNum / stakeAmount;
 
-              // console.log(withdrawAmount);
-              // console.log(totalAmount);
-
               if (withdrawAmount < totalAmount) {
-                // console.log("切割");
                 let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
                 // 切割 share
                 splitArgs = [
@@ -1239,8 +1236,6 @@ export async function packWithdrawTxb(
                   arguments: splitArgs,
                   typeArguments: splitTypeArgs
                 });
-
-                // console.log(newShare);
 
                 switch (poolType) {
                   case PoolTypeEnum.VALIDATOR:
@@ -1534,6 +1529,10 @@ export async function packClaimRewardTxb(
   winnerInfoList: any[]
 ) {
 
+  if (winnerInfoList.length == 0){
+    return null;
+  }
+
   let txb: TransactionBlock = new TransactionBlock();
 
   for (let winnerInfo of winnerInfoList) {
@@ -1604,6 +1603,33 @@ export async function packClaimRewardTxb(
   }
 
   return txb;
+}
+
+// 存入 claim 成功後的 digest
+export async function saveClaimDigest(poolType: string, address: string, successResult: any){
+
+  if (successResult){
+    let digest = successResult.digest;
+    let digestInfo: any = await getClaimDigestList(poolType, address);
+    let digestList = digestInfo.digestList;
+    digestList.push(SUI_VISION_DOMAIN+digest);
+    localStorage.setItem(address+poolType+"digestList", JSON.stringify(digestList));
+  }
+}
+
+// 取得 claim 的 digest List
+export async function getClaimDigestList(poolType: string, address: string) {
+
+  let digestList: any[] = [];
+
+  let digestListStr = localStorage.getItem(address+poolType+"digestList");
+  if (digestListStr && digestListStr.length > 0){
+    digestList = JSON.parse(digestListStr);
+  }
+
+  return {
+    digestList: digestList
+  }
 }
 
 // 取得 最高 apy 的 Validator 資訊
