@@ -464,7 +464,7 @@ export async function getPoolRewardInfo(poolType: string) {
       let topValidator = await getTopValidator(null);
 
       let data = {
-        addresses: [topValidator]
+        addresses: [topValidator.address]
       }
 
       let suiVisionResp = await fetch(`https://api.blockberry.one/sui/v1/validators/metadata`, {
@@ -479,16 +479,21 @@ export async function getPoolRewardInfo(poolType: string) {
       let validatorInfo = await suiVisionResp.json();
 
       if (Object.keys(validatorInfo).length !== 0) {
-        let topValidatorTotalDeposit: number = Number(validatorInfo[topValidator.address].stakeAmount) / SUI_COIN_DECIMAL;
-        let topValidatorTotalReward: number = topValidatorTotalDeposit * topValidator.apy;
-
-        rewardAmount = Number(topValidatorTotalReward * totalDeposit / topValidatorTotalDeposit + oldRewardAmount).toFixed(15);
+        console.log(validatorInfo);
+        if (validatorInfo.status === 200){
+          let topValidatorTotalDeposit: number = Number(validatorInfo[topValidator.address].stakeAmount) / SUI_COIN_DECIMAL;
+          let topValidatorTotalReward: number = topValidatorTotalDeposit * topValidator.apy / 365;
+  
+          rewardAmount = Number(topValidatorTotalReward * totalDeposit / topValidatorTotalDeposit + oldRewardAmount).toFixed(15);
+        }
       }
       break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
       let bucketStakeInfo: any = await getBucketStakeInfo();
-      let bucketRewardAmount: number = Number(bucketStakeInfo.rewardAmount);
+      // let bucketRewardAmount: number = Number(bucketStakeInfo.rewardAmount);
       let bucketStakeAmount: number = Number(bucketStakeInfo.depositAmount);
+      let bucketApy: number = Number(bucketStakeInfo.apy);
+      let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365;
 
       rewardAmount = Number(bucketRewardAmount * totalDeposit / bucketStakeAmount + oldRewardAmount).toFixed(15);
       break;
@@ -496,13 +501,13 @@ export async function getPoolRewardInfo(poolType: string) {
       let marketData = await scallopQuery.queryMarket();
       if (marketData.pools.sca) {
         let scallopSupplyApy = marketData.pools.sca.supplyApy;
-        let scallopBorrowApy = marketData.pools.sca.borrowApy;
+        // let scallopBorrowApy = marketData.pools.sca.borrowApy;
         let scallopCoinPrice = marketData.pools.sca.coinPrice;
-        let scallopBorrowAmount = marketData.pools.sca.borrowCoin;
+        // let scallopBorrowAmount = marketData.pools.sca.borrowCoin;
         let scallopSupplyAmount = marketData.pools.sca.supplyCoin;
-        let scallopRewardAmount = scallopSupplyAmount * scallopSupplyApy ;
+        let scallopRewardAmount = scallopSupplyAmount * scallopCoinPrice * scallopSupplyApy / 365;
 
-        rewardAmount = Number(scallopRewardAmount * totalDeposit / scallopSupplyAmount / scallopBorrowAmount + oldRewardAmount).toFixed(15);
+        rewardAmount = Number(scallopRewardAmount * totalDeposit / scallopSupplyAmount + oldRewardAmount).toFixed(15);
       }
       break;
   }
@@ -1143,29 +1148,6 @@ export async function packWithdrawTxb(
     let poolCommonType = poolTypeCommonTypeMap.get(poolType);
     let totalAmount: number = 0;
     let needBreak: boolean = false;
-
-    let limitWithdrawAlert = false;
-    let limitWithdrawAmount = 0;
-
-    switch (poolType) {
-      case PoolTypeEnum.VALIDATOR:
-        limitWithdrawAlert = withdrawAmount < 1
-        limitWithdrawAmount = 1;
-        break;
-      case PoolTypeEnum.BUCKET_PROTOCOL:
-        limitWithdrawAlert = withdrawAmount < 0.01
-        limitWithdrawAmount = 0.01;
-        break;
-      case PoolTypeEnum.SCALLOP_PROTOCOL:
-        limitWithdrawAlert = withdrawAmount < 0.01
-        limitWithdrawAmount = 0.01;
-        break;
-    }
-
-    if (limitWithdrawAlert){
-      alert(`The minimum withdraw amount is ${limitWithdrawAmount} ${poolCommonType.nativeCoinName}`);
-      return null;
-    }
 
     let objectResponse: any = await suiClient.getOwnedObjects({
       owner: address,
