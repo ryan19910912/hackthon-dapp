@@ -1579,7 +1579,7 @@ export async function saveClaimDigest(poolType: string, address: string, success
     let digestInfo: any = await getClaimDigestList(poolType, address);
     let digestList = digestInfo.digestList;
     digestList.push(SUI_VISION_DOMAIN + digest);
-    localStorage.setItem(address + poolType + "digestList", JSON.stringify(digestList));
+    localStorage.setItem(PACKAGE_ID + address + poolType + "digestList", JSON.stringify(digestList));
   }
 }
 
@@ -1588,7 +1588,7 @@ export async function getClaimDigestList(poolType: string, address: string) {
 
   let digestList: any[] = [];
 
-  let digestListStr = localStorage.getItem(address + poolType + "digestList");
+  let digestListStr = localStorage.getItem(PACKAGE_ID + address + poolType + "digestList");
   if (digestListStr && digestListStr.length > 0) {
     digestList = JSON.parse(digestListStr);
   }

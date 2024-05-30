@@ -94,8 +94,8 @@ export function Test() {
           let poolObject: any = new Object();
           poolObject.poolId = pool.poolId;
           poolObject.poolType = pool.poolType;
-          poolObject.stakeAmount = pool.poolType === "VALIDATOR" ? 1 : 0.005;
-          poolObject.withdrawAmount = pool.poolType === "VALIDATOR" ? 1 : 0.005;
+          poolObject.stakeAmount = pool.poolType === "VALIDATOR" ? 1 : 0.001;
+          poolObject.withdrawAmount = pool.poolType === "VALIDATOR" ? 1 : 0.001;
           poolObject.winnerInfoList = userWinnerInfo.winnerInfoList;
 
           poolObjectMap.set(pool.poolType, poolObject);
