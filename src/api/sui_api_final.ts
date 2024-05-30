@@ -871,8 +871,6 @@ export async function getCanClaimRewardInfo(
   for (let roundNum = 1; roundNum < currentRound; roundNum++) {
     let claimObject = claimedRewardMap.get(roundNum.toString());
     if (Object.keys(claimObject).length === 0) {
-      continue;
-    } else {
       roundArray.push(roundNum);
     }
   }
