@@ -18,7 +18,7 @@ import {
   resetRewardAmount,
   saveClaimDigest,
   getClaimDigestList
-} from "../api/sui_api_final";
+} from "../api/sui_api_final_v2";
 import { useState, useEffect } from 'react';
 
 export function Test() {

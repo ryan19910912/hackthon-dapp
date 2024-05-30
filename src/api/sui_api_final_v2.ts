@@ -21,9 +21,9 @@ const scallopSDK = new Scallop({
 const scallopQuery = await scallopSDK.createScallopQuery();
 
 enum PoolTypeEnum {
-  VALIDATOR = "VALIDATOR",
   BUCKET_PROTOCOL = "BUCKET_PROTOCOL",
-  SCALLOP_PROTOCOL = "SCALLOP_PROTOCOL"
+  SCALLOP_PROTOCOL = "SCALLOP_PROTOCOL",
+  SCALLOP_PROTOCOL_SUI = "SCALLOP_PROTOCOL_SUI"
 }
 
 const FIREBASE_ENV: string = `${import.meta.env.VITE_FIREBASE_ENV}`;
@@ -37,7 +37,6 @@ const DB_CHILD_REWARD_INFO = `rewardInfo`;
 const DB_CHILD_STAKE_INFO = `stakeInfo`;
 
 const SUI_VISION_DOMAIN = `${import.meta.env.VITE_SUI_VISION_DOMAIN}`;
-const SUI_VISION_API_KEY = `${import.meta.env.VITE_SUI_VISION_API_KEY}`;
 
 // 智能合約地址
 const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
@@ -45,6 +44,9 @@ const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
 const GLOBAL_CONFIG_ID: string = `${import.meta.env.VITE_GLOBAL_CONFIG_ID}`;
 // OwnerShip 證明 Object 地址
 const ADMIN_CAP_ID: string = `${import.meta.env.VITE_ADMIN_CAP_ID}`;
+
+const SCALLOP_PROTOCOL_POOL_TYPE = `${PACKAGE_ID}::pool::${PoolTypeEnum.SCALLOP_PROTOCOL}`;
+const SCALLOP_PROTOCOL_SUI_POOL_TYPE = `${PACKAGE_ID}::pool::${PoolTypeEnum.SCALLOP_PROTOCOL_SUI}`;
 
 // 質押池 module 名稱
 const MODULE_POOL: string = "pool";
@@ -57,7 +59,6 @@ const MODULE_STAKED_SHARE: string = "staked_share";
 const FUN_NEW_SHARE_NUMBER_POOL: string = "new_and_share_number_pool_and_share_supply";
 
 // 驗證適配器 module 名稱
-const MODULE_VALIDATOR_ADAPTER: string = "validator_adapter";
 const MODULE_BUCKET_ADAPTER: string = "bucket_adapter";
 const MODULE_SCALLOP_ADAPTER: string = "scallop_adapter"
 // 方法名稱 : 質押
@@ -71,28 +72,25 @@ const FUN_CLAIM_REWARD: string = "claim_reward";
 // 方法名稱 : 切割 share
 const FUN_SPLIT_SHARE: string = "split";
 
-const vaildatorConfig: any = JSON.parse(`${import.meta.env.VITE_VALIDATOR_CONFIG}`);
 const bucketConfig: any = JSON.parse(`${import.meta.env.VITE_BUCKET_CONFIG}`);
 const scallopConfig: any = JSON.parse(`${import.meta.env.VITE_SCALLOP_CONFIG}`);
+const scallopSuiConfig: any = JSON.parse(`${import.meta.env.VITE_SCALLOP_SUI_CONFIG}`);
 
 const poolTypeConfigMap: any = new Map<any, any>();
-poolTypeConfigMap.set(vaildatorConfig.poolType, vaildatorConfig);
 poolTypeConfigMap.set(bucketConfig.poolType, bucketConfig);
 poolTypeConfigMap.set(scallopConfig.poolType, scallopConfig);
+poolTypeConfigMap.set(scallopSuiConfig.poolType, scallopSuiConfig);
 
 const poolAddressConfigMap: any = new Map<any, any>();
-poolAddressConfigMap.set(vaildatorConfig.pool, vaildatorConfig);
 poolAddressConfigMap.set(bucketConfig.pool, bucketConfig);
 poolAddressConfigMap.set(scallopConfig.pool, scallopConfig);
+poolAddressConfigMap.set(scallopSuiConfig.pool, scallopSuiConfig);
 
 // SUI 時間 Share Object 地址
 const SUI_CLOCK_ID: string = "0x6";
-// SUI System state Share Object 地址
-const SUI_SYSTEM_STATE_ID: string = "0x5";
 
 const SUI_COIN_TYPE: string = "0x2::sui::SUI";
 const BUCK_COIN_TYPE: string = `${import.meta.env.VITE_BUCK_COIN_TYPE}`;
-const SBUCK_COIN_TYPE: string = `${import.meta.env.VITE_SBUCK_COIN_TYPE}`;
 const SCA_COIN_TYPE: string = `${import.meta.env.VITE_SCA_COIN_TYPE}`;
 
 // Bucket 所需要的參數
@@ -104,8 +102,6 @@ const BUCKET_LOCK_TIME: number = Number(`${import.meta.env.VITE_BUCKET_LOCK_TIME
 const SCALLOP_VERSION: string = `${import.meta.env.VITE_SCALLOP_VERSION}`;
 const SCALLOP_MARKET: string = `${import.meta.env.VITE_SCALLOP_MARKET}`;
 
-// SUI Coin NATIVE_TYP
-const COIN_TYPE: string = `0x2::coin::Coin`;
 const STAKE_POOL_SHARE_TYPE: string = "StakedPoolShare";
 // SUI Coin Decimal
 const SUI_COIN_DECIMAL = 1_000_000_000;
@@ -116,8 +112,6 @@ const poolTypeCommonTypeMap: any = new Map();
 let filterMap: Map<any, any> = new Map();
 let filters: any[] = [];
 Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
-  // let nativeType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
-  // let rewardType: string = `${COIN_TYPE}<${SUI_COIN_TYPE}>`;
   let nativeType: string = `${SUI_COIN_TYPE}`;
   let rewardType: string = `${SUI_COIN_TYPE}`;
   let nativeDecimal: number = SUI_COIN_DECIMAL;
@@ -127,18 +121,15 @@ Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
   let nativeCoinName: string = "SUI";
   let rewardCoinName: string = "SUI";
   switch (poolType) {
-    case PoolTypeEnum.VALIDATOR:
+    case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
       break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
-      // nativeType = `${COIN_TYPE}<${BUCK_COIN_TYPE}>`;
       nativeType = `${BUCK_COIN_TYPE}`;
       nativeDecimal = BUCK_COIN_DECIMAL;
       nativeCoinType = BUCK_COIN_TYPE;
       nativeCoinName = "BUCK";
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
-      // nativeType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
-      // rewardType = `${COIN_TYPE}<${SCA_COIN_TYPE}>`;
       nativeType = `${SCA_COIN_TYPE}`;
       rewardType = `${SCA_COIN_TYPE}`;
       nativeDecimal = SCA_COIN_DECIMAL;
@@ -319,7 +310,6 @@ export async function getPoolInfo(poolType: any) {
         // 獎勵分配 %數設定
         let rewardAllocate: any = new Object();
         rewardAllocate.allocateGasPayerRatio = (parseFloat(poolData.fields.reward_allocate.fields.allocate_gas_payer_ratio) / 100).toFixed(2);
-        // rewardAllocate.allocateUserAmount = poolData.fields.reward_allocate.fields.allocate_user_amount
         rewardAllocate.platformRatio = (parseFloat(poolData.fields.reward_allocate.fields.platform_ratio) / 100).toFixed(2);
         rewardAllocate.rewardRatio = (parseFloat(poolData.fields.reward_allocate.fields.reward_ratio) / 100).toFixed(2);
         poolObject.rewardAllocate = rewardAllocate;
@@ -357,30 +347,6 @@ export async function getPoolInfo(poolType: any) {
         }
         // 上個 Round 的獎勵數量
         poolObject.lastRewardBalance = lastRewardBalance / rewardDecimal;
-
-        if (poolConfig.poolType === PoolTypeEnum.VALIDATOR) {
-          try {
-            let objResp = await suiClient.getDynamicFieldObject({
-              parentId: poolObject.poolId,
-              name: {
-                type: `${PACKAGE_ID}::validator_adapter::Status`,
-                value: {
-                  dummy_field: false
-                }
-              }
-            });
-            if (objResp.data?.content) {
-              let dataContent: any = objResp.data.content;
-              let validatorStatus: any = new Object();
-              validatorStatus.available = Number(dataContent.fields.value.fields.available) / Number(stakeDecimal);
-              validatorStatus.lastEpoch = dataContent.fields.value.fields.last_epoch;
-              validatorStatus.pending = Number(dataContent.fields.value.fields.pending) / Number(stakeDecimal);
-              poolObject.validatorStatus = validatorStatus;
-            }
-          } catch (error) {
-            // console.error(error);
-          }
-        }
 
         let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}`;
         let dbTotalStakeAmount = 0;
@@ -460,37 +426,8 @@ export async function getPoolRewardInfo(poolType: string) {
   }
 
   switch (poolType) {
-    case PoolTypeEnum.VALIDATOR:
-      let topValidator = await getTopValidator(null);
-
-      let data = {
-        addresses: [topValidator.address]
-      }
-
-      let suiVisionResp = await fetch(`https://api.blockberry.one/sui/v1/validators/metadata`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": SUI_VISION_API_KEY
-        },
-        body: JSON.stringify(data), // body data type must match "Content-Type" header
-      });
-
-      let validatorInfo = await suiVisionResp.json();
-
-      if (Object.keys(validatorInfo).length !== 0) {
-        console.log(validatorInfo);
-        if (validatorInfo.status === 200){
-          let topValidatorTotalDeposit: number = Number(validatorInfo[topValidator.address].stakeAmount) / SUI_COIN_DECIMAL;
-          let topValidatorTotalReward: number = topValidatorTotalDeposit * topValidator.apy / 365;
-  
-          rewardAmount = Number(topValidatorTotalReward * totalDeposit / topValidatorTotalDeposit + oldRewardAmount).toFixed(15);
-        }
-      }
-      break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
       let bucketStakeInfo: any = await getBucketStakeInfo();
-      // let bucketRewardAmount: number = Number(bucketStakeInfo.rewardAmount);
       let bucketStakeAmount: number = Number(bucketStakeInfo.depositAmount);
       let bucketApy: number = Number(bucketStakeInfo.apy);
       let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365;
@@ -501,13 +438,22 @@ export async function getPoolRewardInfo(poolType: string) {
       let marketData = await scallopQuery.queryMarket();
       if (marketData.pools.sca) {
         let scallopSupplyApy = marketData.pools.sca.supplyApy;
-        // let scallopBorrowApy = marketData.pools.sca.borrowApy;
         let scallopCoinPrice = marketData.pools.sca.coinPrice;
-        // let scallopBorrowAmount = marketData.pools.sca.borrowCoin;
         let scallopSupplyAmount = marketData.pools.sca.supplyCoin;
         let scallopRewardAmount = scallopSupplyAmount * scallopCoinPrice * scallopSupplyApy / 365;
 
         rewardAmount = Number(scallopRewardAmount * totalDeposit / scallopSupplyAmount + oldRewardAmount).toFixed(15);
+      }
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+      let suiMarketData = await scallopQuery.queryMarket();
+      if (suiMarketData.pools.sui) {
+        let scallopSuiSupplyApy = suiMarketData.pools.sui.supplyApy;
+        let scallopSuiCoinPrice = suiMarketData.pools.sui.coinPrice;
+        let scallopSuiSupplyAmount = suiMarketData.pools.sui.supplyCoin;
+        let scallopSuiRewardAmount = scallopSuiSupplyAmount * scallopSuiCoinPrice * scallopSuiSupplyApy / 365;
+
+        rewardAmount = Number(scallopSuiRewardAmount * totalDeposit / scallopSuiSupplyAmount + oldRewardAmount).toFixed(15);
       }
       break;
   }
@@ -594,14 +540,14 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
       if (claimedRewardObjectResp.data) {
         let content: any = claimedRewardObjectResp.data.content;
         claimedRewardMap.set(content.fields.name, {
-          rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
+          rewardAmount: (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
           winner: content.fields.value.fields.winner
         });
       }
     }
   } else {
 
-    for (let roundNum = 1; roundNum < currentRound ; roundNum++){
+    for (let roundNum = 1; roundNum < currentRound; roundNum++) {
       claimedRewardMap.set(roundNum.toString(), {});
     }
 
@@ -621,7 +567,7 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
         if (claimedRewardObjectResp.data) {
           let content: any = claimedRewardObjectResp.data.content;
           claimedRewardMap.set(content.fields.name, {
-            rewardAmount : (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
+            rewardAmount: (Number(content.fields.value.fields.reward_amount) / Number(rewardDecimal)).toFixed(10),
             winner: content.fields.value.fields.winner
           });
         }
@@ -875,20 +821,28 @@ export async function getCanClaimRewardInfo(
     }
   }
 
-  let roundInfo = await getRoundInfo(poolId, roundArray);
-  let roundInfoMap = roundInfo.roundInfoMap;
+  if (roundArray.length > 0) {
+    let roundInfo = await getRoundInfo(poolId, roundArray);
+    let roundInfoMap = roundInfo.roundInfoMap;
 
-  let roundExpireTimeInfo = await getRoundExpireTimeInfo(poolId, roundArray);
-  let roundExpireTimeMap = roundExpireTimeInfo.roundExpireTimeMap;
+    let roundExpireTimeInfo = await getRoundExpireTimeInfo(poolId, roundArray);
+    let roundExpireTimeMap = roundExpireTimeInfo.roundExpireTimeMap;
 
-  let nowTime = new Date();
+    let nowTime = new Date();
 
-  for (let [round, luckNum] of roundInfoMap) {
-    let expireTime = roundExpireTimeMap.get(round);
-    if (expireTime) {
-      if (nowTime > new Date(Number(expireTime))) {
-        console.error(`round ${round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
-        continue;
+    for (let [round, luckNum] of roundInfoMap) {
+      let expireTime = roundExpireTimeMap.get(round);
+      if (expireTime) {
+        if (nowTime > new Date(Number(expireTime))) {
+          console.error(`round ${round} is expired : ${new Date(Number(expireTime)).toLocaleString()}`);
+          continue;
+        } else {
+          canClaimRewardMap.set(round, {
+            round: round,
+            luckNum: luckNum,
+            expireTime: expireTime
+          });
+        }
       } else {
         canClaimRewardMap.set(round, {
           round: round,
@@ -896,12 +850,6 @@ export async function getCanClaimRewardInfo(
           expireTime: expireTime
         });
       }
-    } else {
-      canClaimRewardMap.set(round, {
-        round: round,
-        luckNum: luckNum,
-        expireTime: expireTime
-      });
     }
   }
 
@@ -923,6 +871,8 @@ export async function getUserWinnerInfo(
   let canClaimRewardMapInfo = await getCanClaimRewardInfo(poolId, currentRound, claimedRewardInfoId);
   let canClaimRewardMap = canClaimRewardMapInfo.canClaimRewardMap;
 
+  console.log(canClaimRewardMap);
+
   for (let [round, luckInfo] of canClaimRewardMap) {
     for (let userTicket of userTicketList) {
       let stakeShareId = userTicket.stakeShareId;
@@ -931,6 +881,7 @@ export async function getUserWinnerInfo(
       let luckNum = luckInfo.luckNum;
       if (Number(luckNum) >= Number(startNum) && Number(luckNum) <= Number(endNum)) {
         winnerInfoList.push({
+          poolId: poolId,
           round: round,
           luckNum: luckNum,
           stakeShareId: stakeShareId,
@@ -1040,14 +991,14 @@ export async function packStakeTxb(
   }
 
   if (coinsArray.length > 0) {
-    if (poolType !== PoolTypeEnum.VALIDATOR) {
+    if (poolType !== PoolTypeEnum.SCALLOP_PROTOCOL_SUI) {
       txb.mergeCoins(coinObjectId, coinsArray);
     }
   }
 
   let [realCoin]: any = [];
   if (needSplit) {
-    if (poolType === PoolTypeEnum.VALIDATOR) {
+    if (poolType === PoolTypeEnum.SCALLOP_PROTOCOL_SUI) {
       [realCoin] = txb.splitCoins(txb.gas, [txb.pure(stakeCoinAmount)]);
     } else {
       [realCoin] = txb.splitCoins(coinObjectId, [txb.pure(stakeCoinAmount)]);
@@ -1055,27 +1006,6 @@ export async function packStakeTxb(
   }
 
   switch (poolType) {
-    case PoolTypeEnum.VALIDATOR:
-
-      let validatorAddress = (await getTopValidator(null)).address;
-
-      args = [
-        // txb.object(GLOBAL_CONFIG_ID),
-        txb.object(poolConfig.shareSupply),
-        txb.object(poolConfig.numberPool),
-        txb.object(poolId),
-        txb.object(SUI_SYSTEM_STATE_ID),
-        needSplit ? realCoin : txb.object(coinObjectId),
-        txb.pure(validatorAddress),
-        txb.object(SUI_CLOCK_ID)
-      ];
-
-      txb.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_STAKE}`,
-        arguments: args
-      });
-      break;
-
     case PoolTypeEnum.BUCKET_PROTOCOL:
 
       typeArgs = [
@@ -1084,7 +1014,6 @@ export async function packStakeTxb(
       ]
 
       args = [
-        // txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1105,11 +1034,35 @@ export async function packStakeTxb(
     case PoolTypeEnum.SCALLOP_PROTOCOL:
 
       typeArgs = [
+        SCALLOP_PROTOCOL_POOL_TYPE,
         SCA_COIN_TYPE
       ]
 
       args = [
-        // txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolConfig.numberPool),
+        txb.object(poolId),
+        txb.object(SCALLOP_VERSION),
+        txb.object(SCALLOP_MARKET),
+        needSplit ? realCoin : txb.object(coinObjectId),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_STAKE}`,
+        typeArguments: typeArgs,
+        arguments: args
+      });
+
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+
+      typeArgs = [
+        SCALLOP_PROTOCOL_SUI_POOL_TYPE,
+        SUI_COIN_TYPE
+      ]
+
+      args = [
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1199,6 +1152,10 @@ export async function packWithdrawTxb(
 
               if (withdrawAmount < totalAmount) {
                 let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
+                if (shareAmount <= 0){
+                  needBreak = true;
+                  break;
+                }
                 // 切割 share
                 splitArgs = [
                   txb.object(stakePoolShareId),
@@ -1218,22 +1175,6 @@ export async function packWithdrawTxb(
                 });
 
                 switch (poolType) {
-                  case PoolTypeEnum.VALIDATOR:
-
-                    args = [
-                      txb.object(poolConfig.shareSupply),
-                      txb.object(poolConfig.numberPool),
-                      txb.object(poolConfig.pool),
-                      newShare,
-                      txb.object(SUI_SYSTEM_STATE_ID)
-                    ];
-
-                    txb.moveCall({
-                      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
-                      arguments: args
-                    });
-
-                    break;
                   case PoolTypeEnum.BUCKET_PROTOCOL:
 
                     typeArgs = [
@@ -1262,7 +1203,32 @@ export async function packWithdrawTxb(
                   case PoolTypeEnum.SCALLOP_PROTOCOL:
 
                     typeArgs = [
+                      SCALLOP_PROTOCOL_POOL_TYPE,
                       SCA_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      newShare,
+                      txb.object(SCALLOP_VERSION),
+                      txb.object(SCALLOP_MARKET),
+                      txb.object(SUI_CLOCK_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+
+                    break;
+                  case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+
+                    typeArgs = [
+                      SCALLOP_PROTOCOL_SUI_POOL_TYPE,
+                      SUI_COIN_TYPE
                     ]
 
                     args = [
@@ -1287,22 +1253,6 @@ export async function packWithdrawTxb(
                 break;
               } else {
                 switch (poolType) {
-                  case PoolTypeEnum.VALIDATOR:
-
-                    args = [
-                      txb.object(poolConfig.shareSupply),
-                      txb.object(poolConfig.numberPool),
-                      txb.object(poolConfig.pool),
-                      txb.object(stakePoolShareId),
-                      txb.object(SUI_SYSTEM_STATE_ID)
-                    ];
-
-                    txb.moveCall({
-                      target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_WITHDRAW}`,
-                      arguments: args
-                    });
-
-                    break;
                   case PoolTypeEnum.BUCKET_PROTOCOL:
 
                     typeArgs = [
@@ -1331,7 +1281,31 @@ export async function packWithdrawTxb(
                   case PoolTypeEnum.SCALLOP_PROTOCOL:
 
                     typeArgs = [
+                      SCALLOP_PROTOCOL_POOL_TYPE,
                       SCA_COIN_TYPE
+                    ]
+
+                    args = [
+                      txb.object(poolConfig.shareSupply),
+                      txb.object(poolConfig.numberPool),
+                      txb.object(poolConfig.pool),
+                      txb.object(stakePoolShareId),
+                      txb.object(SCALLOP_VERSION),
+                      txb.object(SCALLOP_MARKET),
+                      txb.object(SUI_CLOCK_ID)
+                    ];
+
+                    txb.moveCall({
+                      target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_WITHDRAW}`,
+                      arguments: args,
+                      typeArguments: typeArgs
+                    });
+                    break;
+                  case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+
+                    typeArgs = [
+                      SCALLOP_PROTOCOL_SUI_POOL_TYPE,
+                      SUI_COIN_TYPE
                     ]
 
                     args = [
@@ -1393,8 +1367,6 @@ export async function packAllocateRewardsTxb(
 
   const drand_round: number = theLatestBeacon.round;
 
-  let validatorAddress = (await getTopValidator(null)).address;
-
   let privateKeyByte = bls.utils.randomPrivateKey();
   let publicKeyByte = bls.getPublicKey(privateKeyByte);
 
@@ -1406,26 +1378,6 @@ export async function packAllocateRewardsTxb(
   );
 
   switch (poolType) {
-    case PoolTypeEnum.VALIDATOR:
-
-      args = [
-        txb.object(GLOBAL_CONFIG_ID),
-        txb.object(poolConfig.shareSupply),
-        txb.object(SUI_SYSTEM_STATE_ID),
-        txb.object(poolId),
-        txb.pure.address(validatorAddress),
-        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
-        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
-        txb.pure(hex16String2Vector(drandRoundHex)),
-        txb.object(SUI_CLOCK_ID)
-      ];
-
-      txb.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_ALLOCATE_REWARDS}`,
-        arguments: args
-      });
-
-      break;
     case PoolTypeEnum.BUCKET_PROTOCOL:
 
       typeArgs = [
@@ -1454,7 +1406,34 @@ export async function packAllocateRewardsTxb(
     case PoolTypeEnum.SCALLOP_PROTOCOL:
 
       typeArgs = [
+        SCALLOP_PROTOCOL_POOL_TYPE,
         SCA_COIN_TYPE
+      ]
+
+      args = [
+        txb.object(GLOBAL_CONFIG_ID),
+        txb.object(poolConfig.shareSupply),
+        txb.object(poolId),
+        txb.object(SCALLOP_VERSION),
+        txb.object(SCALLOP_MARKET),
+        txb.pure(bcs.vector(bcs.U8).serialize(messageSign)),
+        txb.pure(bcs.vector(bcs.U8).serialize(publicKeyByte)),
+        txb.pure(hex16String2Vector(drandRoundHex)),
+        txb.object(SUI_CLOCK_ID)
+      ];
+
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_ALLOCATE_REWARDS}`,
+        arguments: args,
+        typeArguments: typeArgs
+      });
+
+      break;
+    case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+
+      typeArgs = [
+        SCALLOP_PROTOCOL_SUI_POOL_TYPE,
+        SUI_COIN_TYPE
       ]
 
       args = [
@@ -1509,7 +1488,7 @@ export async function packClaimRewardTxb(
   winnerInfoList: any[]
 ) {
 
-  if (winnerInfoList.length == 0){
+  if (winnerInfoList.length == 0) {
     return null;
   }
 
@@ -1523,21 +1502,6 @@ export async function packClaimRewardTxb(
     let stakedShareId = winnerInfo.stakeShareId;
 
     switch (poolType) {
-      case PoolTypeEnum.VALIDATOR:
-
-        args = [
-          txb.object(winnerInfo.poolId),
-          txb.pure(winnerInfo.round),
-          txb.makeMoveVec({ objects: [stakedShareId] }),
-          txb.object(SUI_CLOCK_ID)
-        ];
-
-        txb.moveCall({
-          target: `${PACKAGE_ID}::${MODULE_VALIDATOR_ADAPTER}::${FUN_CLAIM_REWARD}`,
-          arguments: args
-        });
-
-        break;
       case PoolTypeEnum.BUCKET_PROTOCOL:
 
         typeArgs = [
@@ -1562,7 +1526,29 @@ export async function packClaimRewardTxb(
       case PoolTypeEnum.SCALLOP_PROTOCOL:
 
         typeArgs = [
+          SCALLOP_PROTOCOL_POOL_TYPE,
           SCA_COIN_TYPE
+        ]
+
+        args = [
+          txb.object(winnerInfo.poolId),
+          txb.pure(winnerInfo.round),
+          txb.makeMoveVec({ objects: [stakedShareId] }),
+          txb.object(SUI_CLOCK_ID)
+        ];
+
+        txb.moveCall({
+          target: `${PACKAGE_ID}::${MODULE_SCALLOP_ADAPTER}::${FUN_CLAIM_REWARD}`,
+          arguments: args,
+          typeArguments: typeArgs
+        });
+
+        break;
+      case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
+
+        typeArgs = [
+          SCALLOP_PROTOCOL_SUI_POOL_TYPE,
+          SUI_COIN_TYPE
         ]
 
         args = [
@@ -1586,14 +1572,14 @@ export async function packClaimRewardTxb(
 }
 
 // 存入 claim 成功後的 digest
-export async function saveClaimDigest(poolType: string, address: string, successResult: any){
+export async function saveClaimDigest(poolType: string, address: string, successResult: any) {
 
-  if (successResult){
+  if (successResult) {
     let digest = successResult.digest;
     let digestInfo: any = await getClaimDigestList(poolType, address);
     let digestList = digestInfo.digestList;
-    digestList.push(SUI_VISION_DOMAIN+digest);
-    localStorage.setItem(address+poolType+"digestList", JSON.stringify(digestList));
+    digestList.push(SUI_VISION_DOMAIN + digest);
+    localStorage.setItem(address + poolType + "digestList", JSON.stringify(digestList));
   }
 }
 
@@ -1602,38 +1588,14 @@ export async function getClaimDigestList(poolType: string, address: string) {
 
   let digestList: any[] = [];
 
-  let digestListStr = localStorage.getItem(address+poolType+"digestList");
-  if (digestListStr && digestListStr.length > 0){
+  let digestListStr = localStorage.getItem(address + poolType + "digestList");
+  if (digestListStr && digestListStr.length > 0) {
     digestList = JSON.parse(digestListStr);
   }
 
   return {
     digestList: digestList
   }
-}
-
-// 取得 最高 apy 的 Validator 資訊
-async function getTopValidator(queryAddress: any) {
-  let objectResponse = await suiClient.getValidatorsApy();
-  let address: string = "";
-  let apy: number = 0;
-  if (objectResponse.apys) {
-    for (let apyObj of objectResponse.apys) {
-      if (queryAddress && queryAddress === apyObj.address) {
-        apy = apyObj.apy;
-        address = apyObj.address;
-        break;
-      }
-      if (apyObj.apy > apy) {
-        apy = apyObj.apy;
-        address = apyObj.address;
-      }
-    }
-  }
-  return {
-    address: address,
-    apy: apy
-  };
 }
 
 function hex16String2Vector(str: string) {
