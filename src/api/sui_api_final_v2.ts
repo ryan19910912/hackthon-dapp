@@ -200,7 +200,8 @@ export async function packNewPoolTxb(
 
   let typeArgs = [
     `${PACKAGE_ID}::${MODULE_POOL}::${poolType}`,
-    nativeType, rewardType
+    nativeType, 
+    rewardType
   ];
 
   let newPoolArgs: TransactionArgument[] = [
@@ -241,6 +242,7 @@ export async function packNewNumberPoolTxb(
   ];
 
   let newPoolArgs: TransactionArgument[] = [
+    txb.object(GLOBAL_CONFIG_ID),
     txb.object(ADMIN_CAP_ID)
   ];
 
@@ -1014,6 +1016,7 @@ export async function packStakeTxb(
       ]
 
       args = [
+        txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1039,6 +1042,7 @@ export async function packStakeTxb(
       ]
 
       args = [
+        txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1063,6 +1067,7 @@ export async function packStakeTxb(
       ]
 
       args = [
+        txb.object(GLOBAL_CONFIG_ID),
         txb.object(poolConfig.shareSupply),
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
@@ -1183,6 +1188,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1208,6 +1214,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1232,6 +1239,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1261,6 +1269,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1286,6 +1295,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1309,6 +1319,7 @@ export async function packWithdrawTxb(
                     ]
 
                     args = [
+                      txb.object(GLOBAL_CONFIG_ID),
                       txb.object(poolConfig.shareSupply),
                       txb.object(poolConfig.numberPool),
                       txb.object(poolConfig.pool),
@@ -1510,6 +1521,7 @@ export async function packClaimRewardTxb(
         ]
 
         args = [
+          txb.object(GLOBAL_CONFIG_ID),
           txb.object(winnerInfo.poolId),
           txb.pure(winnerInfo.round),
           txb.makeMoveVec({ objects: [stakedShareId] }),
@@ -1531,6 +1543,7 @@ export async function packClaimRewardTxb(
         ]
 
         args = [
+          txb.object(GLOBAL_CONFIG_ID),
           txb.object(winnerInfo.poolId),
           txb.pure(winnerInfo.round),
           txb.makeMoveVec({ objects: [stakedShareId] }),
@@ -1552,6 +1565,7 @@ export async function packClaimRewardTxb(
         ]
 
         args = [
+          txb.object(GLOBAL_CONFIG_ID),
           txb.object(winnerInfo.poolId),
           txb.pure(winnerInfo.round),
           txb.makeMoveVec({ objects: [stakedShareId] }),

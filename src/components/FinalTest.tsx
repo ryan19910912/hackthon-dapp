@@ -17,7 +17,9 @@ import {
   packClaimRewardTxb,
   resetRewardAmount,
   saveClaimDigest,
-  getClaimDigestList
+  getClaimDigestList,
+  packNewPoolTxb,
+  packNewNumberPoolTxb
 } from "../api/sui_api_final_v2";
 import { useState, useEffect } from 'react';
 
@@ -27,6 +29,7 @@ export function Test() {
   const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
 
   const [poolObjectMap, setPoolObjectMap] = useState<Map<any, any>>(new Map());
+  const [poolTypeList, setPoolTypeList] = useState<any[]>([]);
 
   useEffect(() => {
     async function run() {
@@ -37,6 +40,7 @@ export function Test() {
         // 取得 Pool 類型陣列
         let poolTypeList = getPoolTypeList();
         console.log(poolTypeList);
+        setPoolTypeList(poolTypeList);
 
         // 取得 Pool 資訊
         let poolInfo = await getPoolInfo(null);
@@ -114,141 +118,217 @@ export function Test() {
     <>
       <div>
         {account ?
-          Array.from(poolObjectMap.keys()).map((poolType: any, index: any) => {
-            return (
-              <div key={index}>
-                <h1>{poolType}</h1>
-                <button className="Button green" onClick={() => packStakeTxb(
-                  account.address,
-                  poolObjectMap.get(poolType).poolId,
-                  poolObjectMap.get(poolType).stakeAmount
-                ).then((txb) => {
-                  if (txb) {
-                    signAndExecuteTransactionBlock(
-                      {
-                        transactionBlock: txb,
-                        options: {
-                          showBalanceChanges: true,
-                          showObjectChanges: true,
-                          showEvents: true,
-                          showEffects: true,
-                          showInput: true,
-                          showRawInput: true
-                        }
-                      },
-                      {
-                        onSuccess: (successResult) => {
-                          console.log('executed transaction block success', successResult);
+          poolObjectMap.size == 0 ?
+            poolTypeList.map((poolType: string, index) => {
+              return (
+                <div key={index}>
+                  <h1>{poolType} Pool Info</h1>
+                  <button className="Button green" onClick={() => packNewPoolTxb(
+                    poolType,
+                    0,
+                    0,
+                    600,
+                    1200,
+                    1,
+                    98,
+                    1
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
                         },
-                        onError: (errorResult) => {
-                          console.error('executed transaction block error', errorResult);
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('packNewPoolTxb success', successResult);
+                          },
+                          onError: (errorResult) => {
+                            console.error('packNewPoolTxb error', errorResult);
+                          },
                         },
-                      },
-                    );
-                  }
-                })}>
-                  Stake
-                </button>
+                      );
+                    }
+                  })}>
+                    Create New Pool
+                  </button>
 
-                <button className="Button violet" onClick={() => packWithdrawTxb(
-                  account.address,
-                  poolType,
-                  poolObjectMap.get(poolType).withdrawAmount
-                ).then((txb) => {
-                  if (txb) {
-                    signAndExecuteTransactionBlock(
-                      {
-                        transactionBlock: txb,
-                        options: {
-                          showBalanceChanges: true,
-                          showObjectChanges: true,
-                          showEvents: true,
-                          showEffects: true,
-                          showInput: true,
-                          showRawInput: true
-                        }
-                      },
-                      {
-                        onSuccess: (successResult) => {
-                          console.log('executed transaction block success', successResult);
+                  <button className="Button violet" onClick={() => packNewNumberPoolTxb(
+                    poolType
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
                         },
-                        onError: (errorResult) => {
-                          console.error('executed transaction block error', errorResult);
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('executed transaction block success', successResult);
+                          },
+                          onError: (errorResult) => {
+                            console.error('executed transaction block error', errorResult);
+                          },
                         },
-                      },
-                    );
-                  }
-                })}>
-                  Withdraw
-                </button>
+                      );
+                    }
+                  })}>
+                    Cteate New Number Pool
+                  </button>
+                </div>
+              )
+            })
+            :
+            Array.from(poolObjectMap.keys()).map((poolType: any, index: any) => {
+              return (
+                <div key={index}>
+                  <h1>{poolType}</h1>
+
+                  <button className="Button green" onClick={() => packStakeTxb(
+                    account.address,
+                    poolObjectMap.get(poolType).poolId,
+                    poolObjectMap.get(poolType).stakeAmount
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
+                        },
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('executed transaction block success', successResult);
+                          },
+                          onError: (errorResult) => {
+                            console.error('executed transaction block error', errorResult);
+                          },
+                        },
+                      );
+                    }
+                  })}>
+                    Stake
+                  </button>
+
+                  <button className="Button violet" onClick={() => packWithdrawTxb(
+                    account.address,
+                    poolType,
+                    poolObjectMap.get(poolType).withdrawAmount
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
+                        },
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('executed transaction block success', successResult);
+                          },
+                          onError: (errorResult) => {
+                            console.error('executed transaction block error', errorResult);
+                          },
+                        },
+                      );
+                    }
+                  })}>
+                    Withdraw
+                  </button>
 
 
-                <button className="Button violet" onClick={() => packAllocateRewardsTxb(
-                  poolObjectMap.get(poolType).poolId
-                ).then((txb) => {
-                  if (txb) {
-                    signAndExecuteTransactionBlock(
-                      {
-                        transactionBlock: txb,
-                        options: {
-                          showBalanceChanges: true,
-                          showObjectChanges: true,
-                          showEvents: true,
-                          showEffects: true,
-                          showInput: true,
-                          showRawInput: true
-                        }
-                      },
-                      {
-                        onSuccess: (successResult) => {
-                          console.log('executed transaction block success', successResult);
-                          resetRewardAmount(poolType);
+                  <button className="Button violet" onClick={() => packAllocateRewardsTxb(
+                    poolObjectMap.get(poolType).poolId
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
                         },
-                        onError: (errorResult) => {
-                          console.error('executed transaction block error', errorResult);
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('executed transaction block success', successResult);
+                            resetRewardAmount(poolType);
+                          },
+                          onError: (errorResult) => {
+                            console.error('executed transaction block error', errorResult);
+                          },
                         },
-                      },
-                    );
-                  }
-                })}>
-                  Allocate Reward
-                </button>
+                      );
+                    }
+                  })}>
+                    Allocate Reward
+                  </button>
 
-                <button className="Button violet" onClick={() => packClaimRewardTxb(
-                  poolType,
-                  poolObjectMap.get(poolType).winnerInfoList
-                ).then((txb) => {
-                  if (txb) {
-                    signAndExecuteTransactionBlock(
-                      {
-                        transactionBlock: txb,
-                        options: {
-                          showBalanceChanges: true,
-                          showObjectChanges: true,
-                          showEvents: true,
-                          showEffects: true,
-                          showInput: true,
-                          showRawInput: true
-                        }
-                      },
-                      {
-                        onSuccess: (successResult) => {
-                          console.log('executed transaction block success', successResult);
-                          saveClaimDigest(poolType, account.address, successResult);
+                  <button className="Button violet" onClick={() => packClaimRewardTxb(
+                    poolType,
+                    poolObjectMap.get(poolType).winnerInfoList
+                  ).then((txb) => {
+                    if (txb) {
+                      signAndExecuteTransactionBlock(
+                        {
+                          transactionBlock: txb,
+                          options: {
+                            showBalanceChanges: true,
+                            showObjectChanges: true,
+                            showEvents: true,
+                            showEffects: true,
+                            showInput: true,
+                            showRawInput: true
+                          }
                         },
-                        onError: (errorResult) => {
-                          console.error('executed transaction block error', errorResult);
+                        {
+                          onSuccess: (successResult) => {
+                            console.log('executed transaction block success', successResult);
+                            saveClaimDigest(poolType, account.address, successResult);
+                          },
+                          onError: (errorResult) => {
+                            console.error('executed transaction block error', errorResult);
+                          },
                         },
-                      },
-                    );
-                  }
-                })}>
-                  Claim Reward
-                </button>
+                      );
+                    }
+                  })}>
+                    Claim Reward
+                  </button>
 
-              </div>
-            )
-          })
+                </div>
+              )
+            })
           :
           <></>
         }
