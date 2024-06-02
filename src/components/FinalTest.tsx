@@ -20,7 +20,7 @@ import {
   getClaimDigestList,
   packNewPoolTxb,
   packNewNumberPoolTxb,
-  getBucketStakeCoinTypeList
+  getBucketCoinTypeAndPriceRateMap,
 } from "../api/sui_api_final_v2";
 import { useState, useEffect } from 'react';
 
@@ -32,7 +32,7 @@ export function Test() {
   const [poolObjectMap, setPoolObjectMap] = useState<Map<any, any>>(new Map());
   const [poolTypeList, setPoolTypeList] = useState<any[]>([]);
 
-  const [bucketStakeCoinTypeList, setBucketStakeCoinTypeList] = useState<any[]>([]);
+  const [bucketCoinTypeAndPriceRateMap, setBucketCoinTypeAndPriceRateMap] = useState<Map<any,any>>(new Map());
 
   useEffect(() => {
     async function run() {
@@ -45,9 +45,9 @@ export function Test() {
         console.log(poolTypeList);
         setPoolTypeList(poolTypeList);
 
-        let bucketStakeCoinTypeList = getBucketStakeCoinTypeList();
-        console.log(bucketStakeCoinTypeList);
-        setBucketStakeCoinTypeList(bucketStakeCoinTypeList);
+        let bucketCoinTypeAndPriceRateMap = await getBucketCoinTypeAndPriceRateMap();
+        console.log(bucketCoinTypeAndPriceRateMap);
+        setBucketCoinTypeAndPriceRateMap(bucketCoinTypeAndPriceRateMap);
 
         // 取得 Pool 資訊
         let poolInfo = await getPoolInfo(null);
@@ -209,7 +209,7 @@ export function Test() {
                     account.address,
                     poolObjectMap.get(poolType).poolId,
                     poolObjectMap.get(poolType).stakeAmount,
-                    bucketStakeCoinTypeList.find(coinType => coinType === "USDC")
+                    poolType === "BUCKET_PROTOCOL" ? "USDT" : null
                   ).then((txb) => {
                     if (txb) {
                       signAndExecuteTransactionBlock(
@@ -241,7 +241,8 @@ export function Test() {
                   <button className="Button violet" onClick={() => packWithdrawTxb(
                     account.address,
                     poolType,
-                    poolObjectMap.get(poolType).withdrawAmount
+                    poolObjectMap.get(poolType).withdrawAmount,
+                    poolType === "BUCKET_PROTOCOL" ? "USDT" : null
                   ).then((txb) => {
                     if (txb) {
                       signAndExecuteTransactionBlock(

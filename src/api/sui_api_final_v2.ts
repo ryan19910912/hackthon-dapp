@@ -26,7 +26,7 @@ enum PoolTypeEnum {
   SCALLOP_PROTOCOL_SUI = "SCALLOP_PROTOCOL_SUI"
 }
 
-enum BucketDepositCoinTypeEnum {
+enum BucketCoinTypeEnum {
   BUCK = "BUCK",
   USDT = "USDT",
   USDC = "USDC"
@@ -194,9 +194,14 @@ export function getPoolTypeList() {
   return Array.from(poolTypeConfigMap.keys());
 }
 
-// 取得 Bucket Stake Coin 類型陣列
-export function getBucketStakeCoinTypeList() {
-  return Object.keys(BucketDepositCoinTypeEnum);
+// 取得 Bucket Stake Coin 類型
+export async function getBucketCoinTypeAndPriceRateMap() {
+  let bucketCoinTypeAndPriceRateMap: Map<any, any> = new Map();
+  let prices = await bucket.getPrices();
+  Object.keys(BucketCoinTypeEnum).forEach(coinType => {
+    bucketCoinTypeAndPriceRateMap.set(coinType, prices[coinType]);
+  });
+  return bucketCoinTypeAndPriceRateMap;
 }
 
 // 構建 新建Pool 交易區塊
@@ -291,7 +296,7 @@ export async function getPoolInfo(poolType: any) {
         continue;
       }
 
-      let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+      let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
 
       let getPoolInfoSnapshot = await get(child(DB_REF, getPoolInfoDbPath));
       if (getPoolInfoSnapshot.exists()) {
@@ -375,7 +380,7 @@ export async function getPoolInfo(poolType: any) {
         // 上個 Round 的獎勵數量
         poolObject.lastRewardBalance = lastRewardBalance / rewardDecimal;
 
-        let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}`;
+        let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}/${PACKAGE_ID}`;
         let dbTotalStakeAmount = 0;
 
         let snapshot = await get(child(DB_REF, dbPath));
@@ -415,8 +420,8 @@ function getNowDateFormatStr() {
 // 取得 Pool 獎勵數量 資訊
 export async function getPoolRewardInfo(poolType: string) {
 
-  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
-  let stakeDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_STAKE_INFO}`;
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}/${PACKAGE_ID}`;
+  let stakeDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_STAKE_INFO}/${PACKAGE_ID}`;
 
   let rewardAmount: string = "0";
   let oldRewardAmount: number = 0;
@@ -461,7 +466,7 @@ export async function getPoolRewardInfo(poolType: string) {
       let bucketApy: number = Number(bucketStakeInfo.apy);
       let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365;
 
-      rewardAmount = Number(bucketRewardAmount * totalDeposit / bucketStakeAmount + oldRewardAmount).toFixed(15);
+      rewardAmount = Number(Number(bucketRewardAmount) * Number(totalDeposit) / Number(bucketStakeAmount) + Number(oldRewardAmount)).toFixed(15);
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
       let marketData = await scallopQuery.queryMarket();
@@ -471,7 +476,7 @@ export async function getPoolRewardInfo(poolType: string) {
         let scallopSupplyAmount = marketData.pools.sca.supplyCoin;
         let scallopRewardAmount = scallopSupplyAmount * scallopCoinPrice * scallopSupplyApy / 365;
 
-        rewardAmount = Number(scallopRewardAmount * totalDeposit / scallopSupplyAmount + oldRewardAmount).toFixed(15);
+        rewardAmount = Number(Number(scallopRewardAmount) * Number(totalDeposit) / Number(scallopSupplyAmount) + Number(oldRewardAmount)).toFixed(15);
       }
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL_SUI:
@@ -482,7 +487,7 @@ export async function getPoolRewardInfo(poolType: string) {
         let scallopSuiSupplyAmount = suiMarketData.pools.sui.supplyCoin;
         let scallopSuiRewardAmount = scallopSuiSupplyAmount * scallopSuiCoinPrice * scallopSuiSupplyApy / 365;
 
-        rewardAmount = Number(scallopSuiRewardAmount * totalDeposit / scallopSuiSupplyAmount + oldRewardAmount).toFixed(15);
+        rewardAmount = Number(Number(scallopSuiRewardAmount) * Number(totalDeposit) / Number(scallopSuiSupplyAmount) + Number(oldRewardAmount)).toFixed(15);
       }
       break;
   }
@@ -995,12 +1000,12 @@ export async function packStakeTxb(
       && bucketStakeCoinType.length > 0
     ) {
       switch (bucketStakeCoinType) {
-        case BucketDepositCoinTypeEnum.USDC:
+        case BucketCoinTypeEnum.USDC:
           stakeCoinType = USDC_COIN_TYPE;
           decimal = USDC_COIN_DECIMAL
           change2Buck = true;
           break;
-        case BucketDepositCoinTypeEnum.USDT:
+        case BucketCoinTypeEnum.USDT:
           stakeCoinType = USDT_COIN_TYPE;
           decimal = USDT_COIN_DECIMAL
           change2Buck = true;
@@ -1146,7 +1151,7 @@ export async function packStakeTxb(
       break;
   }
 
-  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
   await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
@@ -1156,17 +1161,41 @@ export async function packStakeTxb(
 export async function packWithdrawTxb(
   address: string,
   poolType: string,
-  withdrawAmount: number
+  withdrawAmount: number,
+  bucketWithdrawCoinType: string | null | undefined
 ) {
 
   if (address) {
 
-    let txb: TransactionBlock = new TransactionBlock();
+    let txb: any = new TransactionBlock();
 
     let poolConfig = poolTypeConfigMap.get(poolType);
     let poolCommonType = poolTypeCommonTypeMap.get(poolType);
     let totalAmount: number = 0;
     let needBreak: boolean = false;
+
+    let buckChange2OtherCoin = false;
+    let changeCoinType = "";
+    let changeCoinDecimal = SUI_COIN_DECIMAL;
+
+    if (PoolTypeEnum.BUCKET_PROTOCOL === poolType 
+      && bucketWithdrawCoinType != null
+      && bucketWithdrawCoinType != undefined
+      && bucketWithdrawCoinType.length > 0
+    ){
+      switch(bucketWithdrawCoinType){
+        case BucketCoinTypeEnum.USDC:
+          buckChange2OtherCoin = true;
+          changeCoinType = USDC_COIN_TYPE;
+          changeCoinDecimal = USDC_COIN_DECIMAL;
+          break;
+        case BucketCoinTypeEnum.USDT:
+          buckChange2OtherCoin = true;
+          changeCoinType = USDT_COIN_TYPE;
+          changeCoinDecimal = USDT_COIN_DECIMAL;
+          break;
+      }
+    }
 
     let objectResponse: any = await suiClient.getOwnedObjects({
       owner: address,
@@ -1408,9 +1437,20 @@ export async function packWithdrawTxb(
           break;
         }
       }
+
+      if (buckChange2OtherCoin){
+        await bucket.getPsmTx(
+          txb,
+          changeCoinType,
+          withdrawAmount * BUCK_COIN_DECIMAL,
+          true,
+          address,
+          address
+        );
+      }
     }
 
-    let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+    let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
     await remove(child(DB_REF, getPoolInfoDbPath));
 
     return txb;
@@ -1534,7 +1574,7 @@ export async function packAllocateRewardsTxb(
       break;
   }
 
-  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
   await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
@@ -1544,7 +1584,7 @@ export async function packAllocateRewardsTxb(
 // 當 packAllocateRewardsTxb 執行成功後，要來呼叫這支 API
 export async function resetRewardAmount(poolType: string) {
 
-  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}/${PACKAGE_ID}`;
   let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
   let newRewardAmount: number = 0;
   let newTime: string = "";
