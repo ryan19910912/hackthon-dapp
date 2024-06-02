@@ -10,7 +10,7 @@ import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { BucketClient } from "bucket-protocol-sdk";
 import { Scallop } from "@scallop-io/sui-scallop-sdk";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, get, set, child } from "firebase/database";
+import { getDatabase, ref, get, set, child, remove } from "firebase/database";
 
 // Instantiate BucketClient
 const bucket = new BucketClient();
@@ -26,6 +26,12 @@ enum PoolTypeEnum {
   SCALLOP_PROTOCOL_SUI = "SCALLOP_PROTOCOL_SUI"
 }
 
+enum BucketDepositCoinTypeEnum {
+  BUCK = "BUCK",
+  USDT = "USDT",
+  USDC = "USDC"
+}
+
 const FIREBASE_ENV: string = `${import.meta.env.VITE_FIREBASE_ENV}`;
 const FIREBASE_CONFIG: string = `${import.meta.env.VITE_FIREBASE_CONFIG}`;
 
@@ -35,6 +41,8 @@ const DB_REF = ref(FIREBASE_DB);
 const DB_ROOT_PATH = `/demo/${FIREBASE_ENV}`;
 const DB_CHILD_REWARD_INFO = `rewardInfo`;
 const DB_CHILD_STAKE_INFO = `stakeInfo`;
+
+const DB_CHILD_GET_POOL_INFO = `getPoolInfo`;
 
 const SUI_VISION_DOMAIN = `${import.meta.env.VITE_SUI_VISION_DOMAIN}`;
 
@@ -92,6 +100,8 @@ const SUI_CLOCK_ID: string = "0x6";
 const SUI_COIN_TYPE: string = "0x2::sui::SUI";
 const BUCK_COIN_TYPE: string = `${import.meta.env.VITE_BUCK_COIN_TYPE}`;
 const SCA_COIN_TYPE: string = `${import.meta.env.VITE_SCA_COIN_TYPE}`;
+const USDT_COIN_TYPE: string = `${import.meta.env.VITE_USDT_COIN_TYPE}`;
+const USDC_COIN_TYPE: string = `${import.meta.env.VITE_USDC_COIN_TYPE}`;
 
 // Bucket 所需要的參數
 const BUCKET_FLASK: string = `${import.meta.env.VITE_BUCKET_FLASK}`;
@@ -107,6 +117,8 @@ const STAKE_POOL_SHARE_TYPE: string = "StakedPoolShare";
 const SUI_COIN_DECIMAL = 1_000_000_000;
 const BUCK_COIN_DECIMAL = 1_000_000_000;
 const SCA_COIN_DECIMAL = 1_000_000_000;
+const USDC_COIN_DECIMAL = 1_000_000;
+const USDT_COIN_DECIMAL = 1_000_000;
 
 const poolTypeCommonTypeMap: any = new Map();
 let filterMap: Map<any, any> = new Map();
@@ -182,6 +194,11 @@ export function getPoolTypeList() {
   return Array.from(poolTypeConfigMap.keys());
 }
 
+// 取得 Bucket Stake Coin 類型陣列
+export function getBucketStakeCoinTypeList() {
+  return Object.keys(BucketDepositCoinTypeEnum);
+}
+
 // 構建 新建Pool 交易區塊
 export async function packNewPoolTxb(
   poolType: string,
@@ -200,7 +217,7 @@ export async function packNewPoolTxb(
 
   let typeArgs = [
     `${PACKAGE_ID}::${MODULE_POOL}::${poolType}`,
-    nativeType, 
+    nativeType,
     rewardType
   ];
 
@@ -271,6 +288,14 @@ export async function getPoolInfo(poolType: any) {
         continue;
       }
       if (poolType && poolConfig.poolType !== poolType) {
+        continue;
+      }
+
+      let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+
+      let getPoolInfoSnapshot = await get(child(DB_REF, getPoolInfoDbPath));
+      if (getPoolInfoSnapshot.exists()) {
+        poolList.push(getPoolInfoSnapshot.val());
         continue;
       }
 
@@ -363,6 +388,8 @@ export async function getPoolInfo(poolType: any) {
             totalStakeAmount: statistics.totalDeposit
           });
         }
+
+        set(ref(FIREBASE_DB, getPoolInfoDbPath), poolObject);
 
         poolList.push(poolObject);
       }
@@ -592,6 +619,7 @@ export async function getRoundInfo(poolId: string, roundArray: any[]) {
   if (roundArray && roundArray.length > 0) {
 
     for (let round of roundArray) {
+
       let dynamicFieldsResp = await suiClient.getDynamicFieldObject({
         parentId: poolId,
         name: {
@@ -873,8 +901,6 @@ export async function getUserWinnerInfo(
   let canClaimRewardMapInfo = await getCanClaimRewardInfo(poolId, currentRound, claimedRewardInfoId);
   let canClaimRewardMap = canClaimRewardMapInfo.canClaimRewardMap;
 
-  console.log(canClaimRewardMap);
-
   for (let [round, luckInfo] of canClaimRewardMap) {
     for (let userTicket of userTicketList) {
       let stakeShareId = userTicket.stakeShareId;
@@ -945,13 +971,14 @@ async function getTableRawData(fieldId: string, type: string, value: unknown) {
 export async function packStakeTxb(
   address: string,
   poolId: string,
-  stakeAmount: number
+  stakeAmount: number,
+  bucketStakeCoinType: string | undefined | null,
 ) {
 
   let poolConfig = poolAddressConfigMap.get(poolId);
   let poolType = poolConfig.poolType;
 
-  let txb: TransactionBlock = new TransactionBlock();
+  let txb: any = new TransactionBlock();
 
   let args: TransactionArgument[] = [];
   let typeArgs: any[] = [];
@@ -959,6 +986,28 @@ export async function packStakeTxb(
   let stakeCoinType = poolTypeCommonTypeMap.get(poolType).nativeCoinType;
   let coinObjectId: string = "";
   let needSplit = false;
+
+  let change2Buck = false;
+
+  if (PoolTypeEnum.BUCKET_PROTOCOL === poolType) {
+    if (bucketStakeCoinType != null
+      && bucketStakeCoinType != undefined
+      && bucketStakeCoinType.length > 0
+    ) {
+      switch (bucketStakeCoinType) {
+        case BucketDepositCoinTypeEnum.USDC:
+          stakeCoinType = USDC_COIN_TYPE;
+          decimal = USDC_COIN_DECIMAL
+          change2Buck = true;
+          break;
+        case BucketDepositCoinTypeEnum.USDT:
+          stakeCoinType = USDT_COIN_TYPE;
+          decimal = USDT_COIN_DECIMAL
+          change2Buck = true;
+          break;
+      }
+    }
+  }
 
   let walletBalance: any = await suiClient.getBalance({
     owner: address,
@@ -1010,6 +1059,17 @@ export async function packStakeTxb(
   switch (poolType) {
     case PoolTypeEnum.BUCKET_PROTOCOL:
 
+      let coinOut = null;
+
+      if (change2Buck) {
+        coinOut = bucket.psmSwapIn(
+          txb,
+          stakeCoinType, // e.g USDC coin type
+          realCoin, // usdc coin object
+          address, // referrer address
+        );
+      }
+
       typeArgs = [
         BUCK_COIN_TYPE,
         SUI_COIN_TYPE
@@ -1021,7 +1081,7 @@ export async function packStakeTxb(
         txb.object(poolConfig.numberPool),
         txb.object(poolId),
         txb.object(BUCKET_FLASK),
-        needSplit ? realCoin : txb.object(coinObjectId),
+        change2Buck ? coinOut : needSplit ? realCoin : txb.object(coinObjectId),
         txb.object(BUCKET_FOUTAIN),
         txb.pure.u64(BUCKET_LOCK_TIME),
         txb.object(SUI_CLOCK_ID)
@@ -1085,6 +1145,9 @@ export async function packStakeTxb(
 
       break;
   }
+
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+  await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
 }
@@ -1157,7 +1220,7 @@ export async function packWithdrawTxb(
 
               if (withdrawAmount < totalAmount) {
                 let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
-                if (shareAmount <= 0){
+                if (shareAmount <= 0) {
                   needBreak = true;
                   break;
                 }
@@ -1347,6 +1410,9 @@ export async function packWithdrawTxb(
       }
     }
 
+    let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+    await remove(child(DB_REF, getPoolInfoDbPath));
+
     return txb;
   }
 
@@ -1467,6 +1533,9 @@ export async function packAllocateRewardsTxb(
 
       break;
   }
+
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
+  await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
 }

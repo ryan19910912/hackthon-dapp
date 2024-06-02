@@ -19,7 +19,8 @@ import {
   saveClaimDigest,
   getClaimDigestList,
   packNewPoolTxb,
-  packNewNumberPoolTxb
+  packNewNumberPoolTxb,
+  getBucketStakeCoinTypeList
 } from "../api/sui_api_final_v2";
 import { useState, useEffect } from 'react';
 
@@ -31,6 +32,8 @@ export function Test() {
   const [poolObjectMap, setPoolObjectMap] = useState<Map<any, any>>(new Map());
   const [poolTypeList, setPoolTypeList] = useState<any[]>([]);
 
+  const [bucketStakeCoinTypeList, setBucketStakeCoinTypeList] = useState<any[]>([]);
+
   useEffect(() => {
     async function run() {
       if (account) {
@@ -41,6 +44,10 @@ export function Test() {
         let poolTypeList = getPoolTypeList();
         console.log(poolTypeList);
         setPoolTypeList(poolTypeList);
+
+        let bucketStakeCoinTypeList = getBucketStakeCoinTypeList();
+        console.log(bucketStakeCoinTypeList);
+        setBucketStakeCoinTypeList(bucketStakeCoinTypeList);
 
         // 取得 Pool 資訊
         let poolInfo = await getPoolInfo(null);
@@ -201,7 +208,8 @@ export function Test() {
                   <button className="Button green" onClick={() => packStakeTxb(
                     account.address,
                     poolObjectMap.get(poolType).poolId,
-                    poolObjectMap.get(poolType).stakeAmount
+                    poolObjectMap.get(poolType).stakeAmount,
+                    bucketStakeCoinTypeList.find(coinType => coinType === "USDC")
                   ).then((txb) => {
                     if (txb) {
                       signAndExecuteTransactionBlock(
