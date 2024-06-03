@@ -296,7 +296,7 @@ export async function getPoolInfo(poolType: any) {
         continue;
       }
 
-      let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
+      let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
 
       let getPoolInfoSnapshot = await get(child(DB_REF, getPoolInfoDbPath));
       if (getPoolInfoSnapshot.exists()) {
@@ -380,7 +380,7 @@ export async function getPoolInfo(poolType: any) {
         // 上個 Round 的獎勵數量
         poolObject.lastRewardBalance = lastRewardBalance / rewardDecimal;
 
-        let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}/${PACKAGE_ID}`;
+        let dbPath = `${DB_ROOT_PATH}/${poolObject.poolType}/${DB_CHILD_STAKE_INFO}`;
         let dbTotalStakeAmount = 0;
 
         let snapshot = await get(child(DB_REF, dbPath));
@@ -420,8 +420,8 @@ function getNowDateFormatStr() {
 // 取得 Pool 獎勵數量 資訊
 export async function getPoolRewardInfo(poolType: string) {
 
-  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}/${PACKAGE_ID}`;
-  let stakeDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_STAKE_INFO}/${PACKAGE_ID}`;
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
+  let stakeDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_STAKE_INFO}`;
 
   let rewardAmount: string = "0";
   let oldRewardAmount: number = 0;
@@ -1151,7 +1151,7 @@ export async function packStakeTxb(
       break;
   }
 
-  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
   await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
@@ -1450,7 +1450,7 @@ export async function packWithdrawTxb(
       }
     }
 
-    let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
+    let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
     await remove(child(DB_REF, getPoolInfoDbPath));
 
     return txb;
@@ -1574,7 +1574,7 @@ export async function packAllocateRewardsTxb(
       break;
   }
 
-  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}/${PACKAGE_ID}`;
+  let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
   await remove(child(DB_REF, getPoolInfoDbPath));
 
   return txb;
@@ -1584,7 +1584,7 @@ export async function packAllocateRewardsTxb(
 // 當 packAllocateRewardsTxb 執行成功後，要來呼叫這支 API
 export async function resetRewardAmount(poolType: string) {
 
-  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}/${PACKAGE_ID}`;
+  let rewardDbPath = `${DB_ROOT_PATH}/${poolType}/${DB_CHILD_REWARD_INFO}`;
   let rewardSnapshot = await get(child(DB_REF, rewardDbPath));
   let newRewardAmount: number = 0;
   let newTime: string = "";
