@@ -48,6 +48,10 @@ const SUI_VISION_DOMAIN = `${import.meta.env.VITE_SUI_VISION_DOMAIN}`;
 
 // 智能合約地址
 const PACKAGE_ID: string = `${import.meta.env.VITE_PACKAGE_ID}`;
+
+// 智能合約 升級後的舊合約地址
+const UPGRADE_PACKAGE_IDS: [] = JSON.parse(`${import.meta.env.VITE_UPGRADE_PACKAGE_IDS}`);
+
 // 全域設定 Share Object 地址
 const GLOBAL_CONFIG_ID: string = `${import.meta.env.VITE_GLOBAL_CONFIG_ID}`;
 // OwnerShip 證明 Object 地址
@@ -152,13 +156,32 @@ Array.from(poolTypeConfigMap.keys()).map((poolType: any) => {
       rewardCoinName = "SCA";
       break;
   }
+  let allFilters: any[] = [];
   let structType = `${PACKAGE_ID}::${MODULE_STAKED_SHARE}::${STAKE_POOL_SHARE_TYPE}
     <${PACKAGE_ID}::${MODULE_POOL}::${poolType},${nativeType}, ${rewardType}>`;
   let filter: SuiObjectDataFilter = {
     StructType: structType
   }
-  filterMap.set(poolType, filter);
+
+  allFilters.push(filter);
   filters.push(filter);
+
+  if (UPGRADE_PACKAGE_IDS.length > 0){
+    for (let packageId of UPGRADE_PACKAGE_IDS){
+      if (packageId !== ""){
+        let upgradeStructType = `${packageId}::${MODULE_STAKED_SHARE}::${STAKE_POOL_SHARE_TYPE}
+        <${packageId}::${MODULE_POOL}::${poolType},${nativeType}, ${rewardType}>`;
+        let upgradeFilter: SuiObjectDataFilter = {
+          StructType: upgradeStructType
+        }
+        allFilters.push(upgradeFilter);
+        filters.push(upgradeFilter);
+      }
+    }
+  }
+
+  filterMap.set(poolType, allFilters);
+
   poolTypeCommonTypeMap.set(poolType, {
     nativeType: nativeType,
     rewardType: rewardType,
@@ -285,6 +308,17 @@ export async function getPoolInfo(poolType: any) {
   let poolList: Object[] = new Array<Object>();
   poolInfo.poolList = poolList;
 
+  let getPackageIdDbPath = `${DB_ROOT_PATH}/PackageId`;
+  let getPackageIdSnapshot = await get(child(DB_REF, getPackageIdDbPath));
+  let needRefresh = true;
+
+  if (getPackageIdSnapshot.exists()) {
+    let packageId = getPackageIdSnapshot.val();
+    if (packageId === PACKAGE_ID){
+      needRefresh = false;
+    }
+  }
+
   if (poolAddressConfigMap.size > 0) {
 
     for (let poolConfig of poolAddressConfigMap.values()) {
@@ -298,10 +332,13 @@ export async function getPoolInfo(poolType: any) {
 
       let getPoolInfoDbPath = `${DB_ROOT_PATH}/${poolConfig.poolType}/${DB_CHILD_GET_POOL_INFO}`;
 
-      let getPoolInfoSnapshot = await get(child(DB_REF, getPoolInfoDbPath));
-      if (getPoolInfoSnapshot.exists()) {
-        poolList.push(getPoolInfoSnapshot.val());
-        continue;
+      if (!needRefresh){
+
+        let getPoolInfoSnapshot = await get(child(DB_REF, getPoolInfoDbPath));
+        if (getPoolInfoSnapshot.exists()) {
+          poolList.push(getPoolInfoSnapshot.val());
+          continue;
+        }
       }
 
       let poolObjectResp = await suiClient.getObject({
@@ -394,12 +431,16 @@ export async function getPoolInfo(poolType: any) {
           });
         }
 
+        console.log(poolObject);
+
         set(ref(FIREBASE_DB, getPoolInfoDbPath), poolObject);
 
         poolList.push(poolObject);
       }
     }
   }
+
+  set(ref(FIREBASE_DB, getPackageIdDbPath), PACKAGE_ID);
 
   return poolInfo;
 }
@@ -676,50 +717,61 @@ export async function getRoundExpireTimeInfo(poolId: string, roundArray: any[]) 
   let roundExpireTimeMap: Map<any, any> = new Map();
   roundExpireTimeInfo.roundExpireTimeMap = roundExpireTimeMap;
 
-  let dynamicFieldsResp = await suiClient.getDynamicFieldObject({
-    parentId: poolId,
-    name: {
-      type: `${PACKAGE_ID}::pool::ClaimExpiredTime`,
-      value: {
-        dummy_field: false
-      }
-    }
+  let dynamicDataResp = await suiClient.getDynamicFields({
+    parentId: poolId
   });
 
-  if (dynamicFieldsResp.data) {
-    let content: any = dynamicFieldsResp.data.content;
-    if (roundArray && roundArray.length > 0) {
-      for (let round of roundArray) {
-        // 取得到期時間
-        let expireDynamicFieldObjectResp = await suiClient.getDynamicFieldObject({
-          parentId: content.fields.id.id,
-          name: {
-            type: "u64",
-            value: `${round}`
-          }
-        });
-        if (expireDynamicFieldObjectResp.data) {
-          let content: any = expireDynamicFieldObjectResp.data.content;
-          roundExpireTimeMap.set(content.fields.name, content.fields.value);
-        }
+  if (dynamicDataResp.data){
+    for (let data of dynamicDataResp.data){
+      if (!data.name.type.includes("pool::ClaimExpiredTime")){
+        continue;
       }
-    } else {
-      // 取得到期時間
-      let expireDynamicFieldsResp = await suiClient.getDynamicFields({
-        parentId: content.fields.id.id,
+      let dynamicFieldsResp = await suiClient.getDynamicFieldObject({
+        parentId: poolId,
+        name: {
+          type: data.name.type,
+          value: data.name.value
+        }
       });
-      if (expireDynamicFieldsResp.data) {
-        let expireDynamicFieldDataArray = expireDynamicFieldsResp.data;
-        for (let expireDynamicFieldData of expireDynamicFieldDataArray) {
-          let expireData = await suiClient.getObject({
-            id: expireDynamicFieldData.objectId,
-            options: {
-              showContent: true
+    
+      console.log(dynamicFieldsResp);
+    
+      if (dynamicFieldsResp.data) {
+        let content: any = dynamicFieldsResp.data.content;
+        if (roundArray && roundArray.length > 0) {
+          for (let round of roundArray) {
+            // 取得到期時間
+            let expireDynamicFieldObjectResp = await suiClient.getDynamicFieldObject({
+              parentId: content.fields.id.id,
+              name: {
+                type: "u64",
+                value: `${round}`
+              }
+            });
+            if (expireDynamicFieldObjectResp.data) {
+              let content: any = expireDynamicFieldObjectResp.data.content;
+              roundExpireTimeMap.set(content.fields.name, content.fields.value);
             }
+          }
+        } else {
+          // 取得到期時間
+          let expireDynamicFieldsResp = await suiClient.getDynamicFields({
+            parentId: content.fields.id.id,
           });
-          if (expireData.data?.content) {
-            let expireDataContent: any = expireData.data.content;
-            roundExpireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
+          if (expireDynamicFieldsResp.data) {
+            let expireDynamicFieldDataArray = expireDynamicFieldsResp.data;
+            for (let expireDynamicFieldData of expireDynamicFieldDataArray) {
+              let expireData = await suiClient.getObject({
+                id: expireDynamicFieldData.objectId,
+                options: {
+                  showContent: true
+                }
+              });
+              if (expireData.data?.content) {
+                let expireDataContent: any = expireData.data.content;
+                roundExpireTimeMap.set(expireDataContent.fields.name, expireDataContent.fields.value);
+              }
+            }
           }
         }
       }
@@ -798,14 +850,14 @@ export async function getUserStakeInfo(
 
   if (address) {
 
-    let filterStract = filterMap.get(poolType);
+    let filterStractList = filterMap.get(poolType);
     let objectResponse: any = await suiClient.getOwnedObjects({
       owner: address,
       options: {
         showContent: true
       },
       filter: {
-        MatchAny: [filterStract]
+        MatchAny: filterStractList
       }
     });
 
@@ -846,7 +898,6 @@ export async function getCanClaimRewardInfo(
   claimedRewardInfoId: string
 ) {
   let canClaimRewardMap: Map<any, any> = new Map();
-
   let poolType = poolAddressConfigMap.get(poolId).poolType;
 
   let roundArray: any[] = [];
@@ -1254,14 +1305,16 @@ export async function packWithdrawTxb(
 
               if (withdrawAmount < totalAmount) {
                 let shareAmount = Number(withdrawAmount) - (Number(totalAmount) - Number(realAmount));
+                shareAmount = parseInt((shareAmount * numRate * decimal).toString());
                 if (shareAmount <= 0) {
+                  console.log(`shareAmount: ${shareAmount} <= 0,不切割`);
                   needBreak = true;
                   break;
                 }
                 // 切割 share
                 splitArgs = [
                   txb.object(stakePoolShareId),
-                  txb.pure(parseInt((shareAmount * numRate * decimal).toString()))
+                  txb.pure(shareAmount)
                 ];
 
                 splitTypeArgs = [
