@@ -546,7 +546,7 @@ export async function getPoolRewardInfo(poolType: string) {
   });
 
   return {
-    rewardAmount: rewardAmount
+    rewardAmount: oldRewardAmount
   }
 }
 
@@ -884,6 +884,9 @@ export async function getUserStakeInfo(
   }
 
   let luckRate: number = userStakeTotalAmount == 0 ? 0 : (Number(userStakeTotalAmount) / Number(totalDeposit)) * 100
+  if (luckRate > 100){
+    luckRate = 100;
+  }
 
   userStakeInfo.userStakeTotalAmount = userStakeTotalAmount;
   userStakeInfo.luckRate = luckRate;
