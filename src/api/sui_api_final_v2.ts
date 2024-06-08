@@ -546,7 +546,7 @@ export async function getPoolRewardInfo(poolType: string) {
   });
 
   return {
-    rewardAmount: oldRewardAmount
+    rewardAmount: rewardAmount
   }
 }
 
@@ -654,6 +654,11 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
       }
     }
   }
+
+  claimedRewardMap.forEach((k ,y) => {
+    console.log(k.rewardAmount);
+    console.log(k.winner);
+  })
 
   return {
     claimedRewardMap: claimedRewardMap
