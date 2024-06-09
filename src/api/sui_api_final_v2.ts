@@ -502,6 +502,8 @@ export async function getPoolRewardInfo(poolType: string) {
   } else if (diffDayTime > 0) {
     oldRewardAmount = newRewardAmount;
     oldTime = newTime;
+  } else {
+    diffDayTime = 1;
   }
 
   switch (poolType) {
