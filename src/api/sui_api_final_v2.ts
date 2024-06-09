@@ -493,14 +493,17 @@ export async function getPoolRewardInfo(poolType: string) {
     totalDeposit = stakeSnapshot.val().totalStakeAmount;
   }
 
+  // 相差幾天
   let diffDayTime = diffDay(nowDateFormatStr, oldTime);
 
   if (oldTime === "") {
+    // 如果沒有舊的時間，則初始化
     oldTime = nowDateFormatStr;
     oldRewardAmount = 0;
     diffDayTime = 1;
   } else if (diffDayTime > 0) {
-    oldRewardAmount = newRewardAmount;
+    // 如果相差時間大於 0，則要把 新的數據變成舊的數據
+    oldRewardAmount = newRewardAmount * diffDayTime;
     oldTime = newTime;
   } else {
     diffDayTime = 1;
@@ -511,7 +514,7 @@ export async function getPoolRewardInfo(poolType: string) {
       let bucketStakeInfo: any = await getBucketStakeInfo();
       let bucketStakeAmount: number = Number(bucketStakeInfo.depositAmount);
       let bucketApy: number = Number(bucketStakeInfo.apy);
-      let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365 * diffDayTime;
+      let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365;
 
       rewardAmount = Number(Number(bucketRewardAmount) * Number(totalDeposit) / Number(bucketStakeAmount) + Number(oldRewardAmount)).toFixed(15);
 
@@ -522,7 +525,7 @@ export async function getPoolRewardInfo(poolType: string) {
         let scallopSupplyApy = marketData.pools.sca.supplyApy;
         let scallopCoinPrice = marketData.pools.sca.coinPrice;
         let scallopSupplyAmount = marketData.pools.sca.supplyCoin;
-        let scallopRewardAmount = scallopSupplyAmount * scallopCoinPrice * scallopSupplyApy / 365 * diffDayTime;
+        let scallopRewardAmount = scallopSupplyAmount * scallopCoinPrice * scallopSupplyApy / 365;
 
         rewardAmount = Number(Number(scallopRewardAmount) * Number(totalDeposit) / Number(scallopSupplyAmount) + Number(oldRewardAmount)).toFixed(15);
       }
@@ -533,7 +536,7 @@ export async function getPoolRewardInfo(poolType: string) {
         let scallopSuiSupplyApy = suiMarketData.pools.sui.supplyApy;
         let scallopSuiCoinPrice = suiMarketData.pools.sui.coinPrice;
         let scallopSuiSupplyAmount = suiMarketData.pools.sui.supplyCoin;
-        let scallopSuiRewardAmount = scallopSuiSupplyAmount * scallopSuiCoinPrice * scallopSuiSupplyApy / 365 * diffDayTime;
+        let scallopSuiRewardAmount = scallopSuiSupplyAmount * scallopSuiCoinPrice * scallopSuiSupplyApy / 365;
 
         rewardAmount = Number(Number(scallopSuiRewardAmount) * Number(totalDeposit) / Number(scallopSuiSupplyAmount) + Number(oldRewardAmount)).toFixed(15);
       }
