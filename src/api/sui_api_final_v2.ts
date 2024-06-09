@@ -515,8 +515,6 @@ export async function getPoolRewardInfo(poolType: string) {
 
       rewardAmount = Number(Number(bucketRewardAmount) * Number(totalDeposit) / Number(bucketStakeAmount) + Number(oldRewardAmount)).toFixed(15);
 
-      console.log(rewardAmount);
-
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
       let marketData = await scallopQuery.queryMarket();
