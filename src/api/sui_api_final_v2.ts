@@ -446,7 +446,7 @@ export async function getPoolInfo(poolType: any) {
 }
 
 function diffDay(lastDate: string, earlyDate: string) {
-  return (Date.parse(lastDate) - Date.parse(earlyDate));
+  return (Date.parse(lastDate) - Date.parse(earlyDate)) / (1000 * 60 * 60 * 24);
 }
 
 function getNowDateFormatStr() {
@@ -498,7 +498,7 @@ export async function getPoolRewardInfo(poolType: string) {
   if (oldTime === "") {
     oldTime = nowDateFormatStr;
     diffDayTime = 1;
-  } else if (diffDayTime > 1) {
+  } else if (diffDayTime > 0) {
     oldRewardAmount = newRewardAmount;
     oldTime = newTime;
   } else {
@@ -513,6 +513,9 @@ export async function getPoolRewardInfo(poolType: string) {
       let bucketRewardAmount: number = bucketStakeAmount * bucketApy / 365 * diffDayTime;
 
       rewardAmount = Number(Number(bucketRewardAmount) * Number(totalDeposit) / Number(bucketStakeAmount) + Number(oldRewardAmount)).toFixed(15);
+
+      console.log(rewardAmount);
+
       break;
     case PoolTypeEnum.SCALLOP_PROTOCOL:
       let marketData = await scallopQuery.queryMarket();
@@ -654,11 +657,6 @@ export async function getClaimedRewardInfo(claimedRewardInfoId: string, roundArr
       }
     }
   }
-
-  claimedRewardMap.forEach((k ,y) => {
-    console.log(k.rewardAmount);
-    console.log(k.winner);
-  })
 
   return {
     claimedRewardMap: claimedRewardMap
