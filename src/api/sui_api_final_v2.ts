@@ -497,12 +497,14 @@ export async function getPoolRewardInfo(poolType: string) {
 
   if (oldTime === "") {
     oldTime = nowDateFormatStr;
+    oldRewardAmount = 0;
     diffDayTime = 1;
   } else if (diffDayTime > 0) {
     oldRewardAmount = newRewardAmount;
     oldTime = newTime;
   } else {
     diffDayTime = 1;
+    oldRewardAmount = 0;
   }
 
   switch (poolType) {
